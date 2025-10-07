@@ -148,13 +148,13 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	token, err := utils.GetToken(r)
 	if err != nil {
-		utils.Error(w, http.StatusBadRequest, "missing token")
+		utils.Error(w, http.StatusBadRequest, "missing token"+err.Error())
 		return
 	}
 
 	user, err := utils.GetUserByToken(token)
 	if err != nil {
-		utils.Error(w, http.StatusUnauthorized, "invalid token")
+		utils.Error(w, http.StatusUnauthorized, "Cant get user by token: "+err.Error())
 		return
 	}
 
