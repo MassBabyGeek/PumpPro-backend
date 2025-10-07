@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -91,6 +92,8 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	fmt.Printf("[INFO][Logout] Token: %s\n", token)
+
 	// Récupérer l'ID de l'utilisateur de la session avant de la soft delete
 	var userID string
 	err := database.DB.QueryRow(ctx,
@@ -98,7 +101,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 		token,
 	).Scan(&userID)
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out"+err.Error())
+		utils.Error(w, http.StatusNotFound, "session not found or already logged out: "+err.Error())
 		return
 	}
 
@@ -115,7 +118,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out"+err.Error())
+		utils.Error(w, http.StatusNotFound, "session not found or already logged out")
 		return
 	}
 
