@@ -48,12 +48,28 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Récupérer l'ID de l'utilisateur qui modifie (à adapter selon votre système d'auth)
+	vars := mux.Vars(r)
+	userID := vars["id"]
+	if userID == "" {
+		utils.Error(w, http.StatusBadRequest, "missing user ID in URL")
+		return
+	}
+
 	ctx := context.Background()
 	_, err := database.DB.Exec(ctx,
-		`UPDATE users SET name=$1, avatar=$2, age=$3, weight=$4, height=$5, goal=$6, updated_at=NOW(), updated_by=$8
-		 WHERE id=$7 AND deleted_at IS NULL`,
-		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal, user.ID, user.UpdatedBy,
+		`UPDATE users
+		 SET name = COALESCE(NULLIF($1, ''), name),
+		     avatar = COALESCE(NULLIF($2, ''), avatar),
+		     age = COALESCE($3, age),
+		     weight = COALESCE($4, weight),
+		     height = COALESCE($5, height),
+		     goal = COALESCE(NULLIF($6, ''), goal),
+		     updated_at = NOW(),
+		     updated_by = $7
+		 WHERE id = $8 AND deleted_at IS NULL`,
+		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal,
+		userID, // ici UpdatedBy = userID pour l'instant
+		userID,
 	)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not update user: "+err.Error())
@@ -168,14 +184,14 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 
 	// Calculer les stats globales
 	var stats struct {
-		TotalWorkouts   int     `json:"totalWorkouts"`
-		TotalPushUps    int     `json:"totalPushUps"`
-		TotalCalories   float64 `json:"totalCalories"`
-		TotalTime       int     `json:"totalTime"`
-		BestSession     int     `json:"bestSession"`
-		AveragePushUps  float64 `json:"averagePushUps"`
-		CurrentStreak   int     `json:"currentStreak"`
-		LongestStreak   int     `json:"longestStreak"`
+		TotalWorkouts  int     `json:"totalWorkouts"`
+		TotalPushUps   int     `json:"totalPushUps"`
+		TotalCalories  float64 `json:"totalCalories"`
+		TotalTime      int     `json:"totalTime"`
+		BestSession    int     `json:"bestSession"`
+		AveragePushUps float64 `json:"averagePushUps"`
+		CurrentStreak  int     `json:"currentStreak"`
+		LongestStreak  int     `json:"longestStreak"`
 	}
 
 	err := database.DB.QueryRow(ctx, `
