@@ -98,7 +98,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 		token,
 	).Scan(&userID)
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out")
+		utils.Error(w, http.StatusNotFound, "session not found or already logged out"+err.Error())
 		return
 	}
 
@@ -115,7 +115,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out")
+		utils.Error(w, http.StatusNotFound, "session not found or already logged out"+err.Error())
 		return
 	}
 
