@@ -34,14 +34,21 @@ func GetUserByToken(token string) (model.UserProfile, error) {
 	ctx := context.Background()
 	err := database.DB.QueryRow(ctx, `
 		SELECT
-			u.id, u.name, u.email,
+			u.id,
+			u.name,
+			u.email,
 			COALESCE(u.avatar,'') as avatar,
 			COALESCE(u.age,0) as age,
 			COALESCE(u.weight,0) as weight,
 			COALESCE(u.height,0) as height,
 			COALESCE(u.goal,'') as goal,
-			u.join_date, u.created_at, u.updated_at,
-			u.created_by, u.updated_by, u.deleted_at, u.deleted_by
+			u.join_date,
+			u.created_at,
+			u.updated_at,
+			COALESCE(u.created_by,'') as created_by,
+			COALESCE(u.updated_by,'') as updated_by,
+			COALESCE(u.deleted_at, '1970-01-01') as deleted_at,  -- <-- default value
+			COALESCE(u.deleted_by,'') as deleted_by
 		FROM users u
 		INNER JOIN sessions s ON u.id = s.user_id
 		WHERE s.token = $1 AND s.is_active = true AND u.deleted_at IS NULL

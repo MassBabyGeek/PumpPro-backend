@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -91,8 +90,6 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-
-	fmt.Printf("[INFO][Logout] Token: %s\n", token)
 
 	// Récupérer l'ID de l'utilisateur de la session avant de la soft delete
 	var userID string
