@@ -146,21 +146,15 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		ID        string  `json:"id"`
-		DeletedBy *string `json:"deletedBy"`
-	}
-	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
+	token := utils.GetToken(r)
+	user, err := utils.GetUserByToken(token)
 
 	// Soft delete: on met à jour deleted_at et deleted_by au lieu de supprimer
 	ctx := context.Background()
 	res, err := database.DB.Exec(ctx,
 		`UPDATE users SET deleted_at=NOW(), deleted_by=$2
 		 WHERE id=$1 AND deleted_at IS NULL`,
-		payload.ID, payload.DeletedBy,
+		user.ID, user.ID,
 	)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not delete user: "+err.Error())
