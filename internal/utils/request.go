@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
@@ -15,33 +16,46 @@ func DecodeJSON(r *http.Request, dest interface{}) error {
 	return decoder.Decode(dest)
 }
 
-func GetToken(r *http.Request) string {
+func GetToken(r *http.Request) (string, error) {
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		token = r.URL.Query().Get("token")
+		return "", fmt.Errorf("missing token")
 	}
-	return token
+	return token, nil
 }
 
 func GetUserByToken(token string) (model.UserProfile, error) {
 	var user model.UserProfile
 
+	if token == "" {
+		return user, fmt.Errorf("empty token")
+	}
+
 	ctx := context.Background()
 	err := database.DB.QueryRow(ctx, `
 		SELECT
-			id, name, email, COALESCE(avatar,'') as avatar, age, weight, height,
-			COALESCE(goal,'') as goal, join_date, created_at, updated_at,
-			created_by, updated_by, deleted_at, deleted_by
-		FROM users
-		WHERE id=$1 AND deleted_at IS NULL
+			u.id, u.name, u.email,
+			COALESCE(u.avatar,'') as avatar,
+			COALESCE(u.age,0) as age,
+			COALESCE(u.weight,0) as weight,
+			COALESCE(u.height,0) as height,
+			COALESCE(u.goal,'') as goal,
+			u.join_date, u.created_at, u.updated_at,
+			u.created_by, u.updated_by, u.deleted_at, u.deleted_by
+		FROM users u
+		INNER JOIN sessions s ON u.id = s.user_id
+		WHERE s.token = $1 AND s.is_active = true AND u.deleted_at IS NULL
 	`, token).Scan(
 		&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
 		&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
 		&user.CreatedBy, &user.UpdatedBy, &user.DeletedAt, &user.DeletedBy,
 	)
-
 	if err != nil {
-		return user, err
+		return user, fmt.Errorf("user not found or invalid token: %w", err)
+	}
+
+	if user.ID == "" {
+		return user, fmt.Errorf("invalid user ID retrieved from token")
 	}
 
 	return user, nil

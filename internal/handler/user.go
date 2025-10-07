@@ -146,8 +146,17 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	token := utils.GetToken(r)
+	token, err := utils.GetToken(r)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, "missing token")
+		return
+	}
+
 	user, err := utils.GetUserByToken(token)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
 
 	// Soft delete: on met à jour deleted_at et deleted_by au lieu de supprimer
 	ctx := context.Background()
