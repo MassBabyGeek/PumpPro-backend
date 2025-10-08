@@ -12,10 +12,9 @@ import (
 
 func SetupRouter() http.Handler {
 	r := mux.NewRouter()
-	authenticatedRoutes := mux.NewRouter()
-
-	// Appliquer le middleware de logging
 	r.Use(middleware.LoggerMiddleware)
+
+	authenticatedRoutes := r.NewRoute().Subrouter()
 	authenticatedRoutes.Use(middleware.LoggerMiddleware)
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
 
@@ -113,8 +112,6 @@ func SetupRouter() http.Handler {
 		color.Yellow("[404] %s %s (route non trouvée)", r.Method, r.URL.Path)
 		http.Error(w, "Route not found", http.StatusNotFound)
 	})
-
-	r.PathPrefix("/").Handler(authenticatedRoutes)
 
 	return r
 }
