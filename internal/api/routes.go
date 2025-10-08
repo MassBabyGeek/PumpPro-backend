@@ -30,13 +30,12 @@ func SetupRouter() http.Handler {
 	// Users
 	r.HandleFunc("/users", handler.CreateUser).Methods(http.MethodPost)
 	r.HandleFunc("/users", handler.GetUsers).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users", handler.DeleteUser).Methods(http.MethodDelete)
 	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users/me", handler.GetMe).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
-	authenticatedRoutes.HandleFunc("/users/stats/{selectedPeriod}", handler.GetUserStats).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users/avatar", handler.UploadAvatar).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/users/{id}", handler.DeleteUser).Methods(http.MethodDelete)
+	authenticatedRoutes.HandleFunc("/users/{id}", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/users/{id}/stats/{selectedPeriod}", handler.GetUserStats).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users/{id}/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
 
 	// Challenges
 	r.HandleFunc("/challenges", handler.GetChallenges).Methods(http.MethodGet)

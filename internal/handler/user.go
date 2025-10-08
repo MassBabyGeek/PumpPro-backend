@@ -49,9 +49,20 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userId := r.URL.Query().Get("id")
+	if userId == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
+		return
+	}
+
 	user, err := middleware.GetUserFromContext(r)
 	if err != nil {
 		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	if user.ID != userId {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de modifier l'utilisateur")
 		return
 	}
 
@@ -116,16 +127,6 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, users)
 }
 
-func GetMe(w http.ResponseWriter, r *http.Request) {
-	user, err := middleware.GetUserFromContext(r)
-	if err != nil {
-		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
-		return
-	}
-
-	utils.Success(w, user)
-}
-
 func GetUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -162,6 +163,17 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userId := r.URL.Query().Get("id")
+	if userId == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
+		return
+	}
+
+	if user.ID != userId {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de supprimer l'utilisateur")
+		return
+	}
+
 	// Soft delete: on met à jour deleted_at et deleted_by au lieu de supprimer
 	ctx := context.Background()
 	res, err := database.DB.Exec(ctx,
@@ -184,21 +196,21 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
-	user, err := middleware.GetUserFromContext(r)
-	if err != nil {
-		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+	userId := r.URL.Query().Get("id")
+	if userId == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
 	}
 
 	selectedPeriod := r.URL.Query().Get("selectedPeriod")
 	if selectedPeriod == "" {
-		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer la période", err)
+		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de récupérer la période")
 		return
 	}
 
 	var stats model.Stats
 	ctx := context.Background()
-	err = database.DB.QueryRow(ctx, `
+	err := database.DB.QueryRow(ctx, `
 		SELECT
 			COUNT(*) as totalWorkouts,
 			COALESCE(SUM(total_reps), 0) as totalPushUps,
@@ -208,7 +220,7 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 			COALESCE(AVG(total_reps), 0) as averagePushUps,
 		FROM workout_sessions
 		WHERE user_id = $1 AND start_time >= $2 AND start_time <= $3
-	`, user.ID).Scan(
+	`, userId).Scan(
 		&stats.TotalWorkouts,
 		&stats.TotalPushUps,
 		&stats.TotalTime,
@@ -304,6 +316,17 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	user, err := middleware.GetUserFromContext(r)
 	if err != nil {
 		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	userId := r.URL.Query().Get("id")
+	if userId == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
+		return
+	}
+
+	if user.ID != userId {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de modifier l'utilisateur")
 		return
 	}
 
