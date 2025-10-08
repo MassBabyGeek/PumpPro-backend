@@ -201,9 +201,12 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	fmt.Printf("[INFO][GetUserStats] vars: %s\n", vars)
-	userId := vars["id"]
-	period := vars["period"]
+	fmt.Println("[INFO][GetUserStats] mux.Vars:", vars)
+	fmt.Println("[INFO][GetUserStats] r.URL.Query():", r.URL.Query())
+	fmt.Println("[INFO][GetUserStats] r.URL.Path:", r.URL.Path)
+	fmt.Println("[INFO][GetUserStats] r.URL:", r.URL)
+	userId := r.URL.Query().Get("id")
+	period := r.URL.Query().Get("period")
 
 	if userId == "" {
 		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
