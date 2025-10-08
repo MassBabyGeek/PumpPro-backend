@@ -61,3 +61,12 @@ type SetResult struct {
 	Duration      int       `json:"duration"` // en secondes
 	Timestamp     time.Time `json:"timestamp"`
 }
+
+type Stats struct {
+	TotalWorkouts  int     `json:"totalWorkouts"`
+	TotalPushUps   int     `json:"totalPushUps"`
+	TotalCalories  float64 `json:"totalCalories"`
+	TotalTime      int     `json:"totalTime"`
+	BestSession    int     `json:"bestSession"`
+	AveragePushUps float64 `json:"averagePushUps"`
+}

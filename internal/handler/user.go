@@ -175,36 +175,37 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := vars["id"]
-
-	ctx := context.Background()
-
-	// Calculer les stats globales
-	var stats struct {
-		TotalWorkouts  int     `json:"totalWorkouts"`
-		TotalPushUps   int     `json:"totalPushUps"`
-		TotalCalories  float64 `json:"totalCalories"`
-		TotalTime      int     `json:"totalTime"`
-		BestSession    int     `json:"bestSession"`
-		AveragePushUps float64 `json:"averagePushUps"`
-		CurrentStreak  int     `json:"currentStreak"`
-		LongestStreak  int     `json:"longestStreak"`
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
 	}
 
-	err := database.DB.QueryRow(ctx, `
+	selectedPeriod := r.URL.Query().Get("selectedPeriod")
+	if selectedPeriod == "" {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer la période", err)
+		return
+	}
+
+	var stats model.Stats
+	ctx := context.Background()
+	err = database.DB.QueryRow(ctx, `
 		SELECT
-			COUNT(*) as total_workouts,
-			COALESCE(SUM(total_reps), 0) as total_push_ups,
-			COALESCE(SUM(total_duration), 0) as total_time,
-			COALESCE(MAX(total_reps), 0) as best_session
+			COUNT(*) as totalWorkouts,
+			COALESCE(SUM(total_reps), 0) as totalPushUps,
+			COALESCE(SUM(total_duration), 0) as totalTime
+			COALESCE(MAX(total_reps), 0) as bestSession
+			0 as totalCalories,
+			COALESCE(AVG(total_reps), 0) as averagePushUps,
 		FROM workout_sessions
-		WHERE user_id = $1
-	`, userID).Scan(
+		WHERE user_id = $1 AND start_time >= $2 AND start_time <= $3
+	`, user.ID).Scan(
 		&stats.TotalWorkouts,
 		&stats.TotalPushUps,
 		&stats.TotalTime,
 		&stats.BestSession,
+		&stats.TotalCalories,
+		&stats.AveragePushUps,
 	)
 
 	if err != nil {
