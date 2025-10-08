@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
@@ -66,7 +67,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	token, err := utils.GetToken(r)
+	token, err := middleware.GetTokenFromContext(r)
 	if err != nil {
 		utils.Error(w, http.StatusBadRequest, "token manquant", err)
 		return

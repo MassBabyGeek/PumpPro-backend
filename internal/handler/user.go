@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
@@ -146,13 +147,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	token, err := utils.GetToken(r)
-	if err != nil {
-		utils.Error(w, http.StatusBadRequest, "token manquant", err)
-		return
-	}
-
-	user, err := utils.GetUserByToken(token)
+	user, err := middleware.GetUserFromContext(r)
 	if err != nil {
 		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return

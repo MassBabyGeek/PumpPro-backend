@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
@@ -17,20 +18,26 @@ import (
 func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	var session model.WorkoutSession
 	if err := utils.DecodeJSON(r, &session); err != nil {
-		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "invalid JSON body", err)
+		return
+	}
+
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "user not found in context", err)
 		return
 	}
 
 	ctx := context.Background()
 
 	// Insérer la session
-	err := database.DB.QueryRow(ctx, `
+	err = database.DB.QueryRow(ctx, `
 		INSERT INTO workout_sessions(
 			program_id, user_id, start_time, end_time, total_reps, total_duration, completed, notes, created_at, updated_at
 		) VALUES($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`,
-		session.ProgramID, session.UserID, session.StartTime, session.EndTime,
+		session.ProgramID, user.ID, session.StartTime, session.EndTime,
 		session.TotalReps, session.TotalDuration, session.Completed, session.Notes,
 	).Scan(&session.ID, &session.CreatedAt, &session.UpdatedAt)
 

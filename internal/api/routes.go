@@ -13,6 +13,7 @@ func SetupRouter() http.Handler {
 
 	// Appliquer le middleware de logging
 	r.Use(middleware.LoggerMiddleware)
+	r.Use(middleware.AuthMiddleware)
 
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)
