@@ -8,7 +8,6 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
 	"golang.org/x/crypto/bcrypt"
@@ -33,46 +32,30 @@ type Session struct {
 func Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := utils.DecodeJSON(r, &req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
 	ctx := context.Background()
-	var user model.UserProfile
-	var hashedPassword string
 
-	err := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, COALESCE(avatar,'') as avatar, age, weight, height, COALESCE(goal,'') as goal,
-		 join_date, created_at, updated_at, password_hash
-		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
-		req.Email,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-		&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt, &hashedPassword)
-
+	// Rechercher l'utilisateur avec son mot de passe
+	user, hashedPassword, err := utils.FindUserByEmailWithPassword(ctx, req.Email)
 	if err != nil {
-		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
+		utils.ErrorSimple(w, http.StatusUnauthorized, "identifiants invalides")
 		return
 	}
 
+	// Vérifier le mot de passe
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.Password)); err != nil {
-		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
+		utils.ErrorSimple(w, http.StatusUnauthorized, "identifiants invalides")
 		return
 	}
 
-	// Génération token UUID
-	token := uuid.NewString()
-	now := time.Now()
-
-	// Création session avec created_by
-	var sessionID string
-	err = database.DB.QueryRow(ctx,
-		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
-		 VALUES($1,$2,$3,$4,true,$5,$6,$7)
-		 RETURNING id`,
-		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
-	).Scan(&sessionID)
+	// Créer une session
+	ip, userAgent := utils.ExtractIPAndUserAgent(r)
+	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
 		return
 	}
 
@@ -83,39 +66,17 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		utils.Error(w, http.StatusBadRequest, "missing token")
+	token, err := utils.GetToken(r)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, "token manquant", err)
 		return
 	}
 
 	ctx := context.Background()
 
-	// Récupérer l'ID de l'utilisateur de la session avant de la soft delete
-	var userID string
-	err := database.DB.QueryRow(ctx,
-		`SELECT user_id FROM sessions WHERE token=$1 AND is_active=true AND deleted_at IS NULL`,
-		token,
-	).Scan(&userID)
-	if err != nil {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out: "+err.Error())
-		return
-	}
-
-	// Soft delete de la session
-	res, err := database.DB.Exec(ctx,
-		`UPDATE sessions
-		 SET is_active=false, expires_at=$2, deleted_at=NOW(), deleted_by=$3
-		 WHERE token=$1 AND is_active=true AND deleted_at IS NULL`,
-		token, time.Now(), userID,
-	)
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not logout: "+err.Error())
-		return
-	}
-
-	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "session not found or already logged out")
+	// Invalider la session
+	if err := utils.InvalidateSession(ctx, token); err != nil {
+		utils.Error(w, http.StatusNotFound, "session introuvable ou déjà déconnectée", err)
 		return
 	}
 
@@ -134,51 +95,31 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
 	ctx := context.Background()
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 
-	var user model.UserProfile
-	// Lors du signup, l'utilisateur se crée lui-même, donc created_by sera l'ID retourné
-	err := database.DB.QueryRow(ctx,
-		`INSERT INTO users(name,email,password_hash,avatar,age,weight,height,goal,join_date,created_at,updated_at)
-		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW(),NOW())
-		 RETURNING id, name, email, avatar, age, weight, height, goal, join_date, created_at, updated_at`,
-		payload.Name, payload.Email, string(hashed), "", 0, 0, 0, "",
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar,
-		&user.Age, &user.Weight, &user.Height, &user.Goal,
-		&user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
-	)
-
+	// Hasher le mot de passe
+	hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de hasher le mot de passe", err)
 		return
 	}
 
-	// Mise à jour de created_by avec l'ID de l'utilisateur créé
-	_, err = database.DB.Exec(ctx,
-		`UPDATE users SET created_by=$1 WHERE id=$1`,
-		user.ID,
-	)
+	// Créer l'utilisateur
+	user, err := utils.CreateUser(ctx, payload.Name, payload.Email, string(hashed), "", "email")
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update created_by: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'utilisateur", err)
 		return
 	}
 
-	// Créer un token pour l'auto-login après inscription
-	token := uuid.NewString()
-	now := time.Now()
-
-	_, err = database.DB.Exec(ctx,
-		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
-		 VALUES($1,$2,$3,$4,true,$5,$6,$7)`,
-		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
-	)
+	// Créer une session pour l'auto-login
+	ip, userAgent := utils.ExtractIPAndUserAgent(r)
+	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
 		return
 	}
 
@@ -194,7 +135,7 @@ func ResetPassword(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
@@ -208,7 +149,7 @@ func ResetPassword(w http.ResponseWriter, r *http.Request) {
 	).Scan(&userExists)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not check user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de vérifier l'utilisateur", err)
 		return
 	}
 
@@ -231,7 +172,7 @@ func VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
@@ -253,7 +194,7 @@ func GetSessions(w http.ResponseWriter, r *http.Request) {
 		WHERE deleted_at IS NULL
 	`)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query sessions: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de récupérer les sessions", err)
 		return
 	}
 	defer rows.Close()
@@ -266,7 +207,7 @@ func GetSessions(w http.ResponseWriter, r *http.Request) {
 			&s.IP, &s.UserAgent,
 			&s.CreatedAt, &s.UpdatedAt, &s.CreatedBy, &s.UpdatedBy, &s.DeletedAt, &s.DeletedBy,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan session row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "erreur de lecture des sessions", err)
 			return
 		}
 		sessions = append(sessions, s)
@@ -293,7 +234,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not get session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de récupérer la session", err)
 		return
 	}
 
@@ -309,59 +250,30 @@ func GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		Avatar  string `json:"avatar"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
 	// Validation basique
 	if payload.Email == "" {
-		utils.Error(w, http.StatusBadRequest, "email is required")
+		utils.ErrorSimple(w, http.StatusBadRequest, "email requis")
 		return
 	}
 
 	ctx := context.Background()
-	var user model.UserProfile
 
-	// Vérifier si l'utilisateur existe déjà
-	err := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, COALESCE(avatar,'') as avatar, COALESCE(age,0) as age,
-		 COALESCE(weight,0) as weight, COALESCE(height,0) as height, COALESCE(goal,'') as goal,
-		 COALESCE(provider,'email') as provider, join_date, created_at, updated_at
-		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
-		payload.Email,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-		&user.Goal, &user.Provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
-
-	// Si l'utilisateur n'existe pas, le créer
+	// Trouver ou créer l'utilisateur OAuth
+	user, err := utils.FindOrCreateOAuthUser(ctx, payload.Email, payload.Name, payload.Avatar, "google")
 	if err != nil {
-		err = database.DB.QueryRow(ctx,
-			`INSERT INTO users(name, email, avatar, provider, age, weight, height, goal, join_date, created_at, updated_at, password_hash)
-			 VALUES($1, $2, $3, 'google', 0, 0, 0, '', NOW(), NOW(), NOW(), '')
-			 RETURNING id, name, email, avatar, age, weight, height, goal, join_date, created_at, updated_at`,
-			payload.Name, payload.Email, payload.Avatar,
-		).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-			&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
-
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
-			return
-		}
-
-		// Mise à jour de created_by
-		_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer/trouver l'utilisateur", err)
+		return
 	}
 
 	// Créer une session
-	token := uuid.NewString()
-	now := time.Now()
-
-	_, err = database.DB.Exec(ctx,
-		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
-		 VALUES($1, $2, $3, $4, true, $5, $6, $7)`,
-		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
-	)
+	ip, userAgent := utils.ExtractIPAndUserAgent(r)
+	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
 		return
 	}
 
@@ -380,74 +292,41 @@ func AppleAuth(w http.ResponseWriter, r *http.Request) {
 		UserIdentity string `json:"userIdentity"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
 	// Validation basique
 	if payload.Email == "" && payload.UserIdentity == "" {
-		utils.Error(w, http.StatusBadRequest, "email or userIdentity is required")
+		utils.ErrorSimple(w, http.StatusBadRequest, "email ou userIdentity requis")
 		return
 	}
 
 	ctx := context.Background()
-	var user model.UserProfile
 
-	// Chercher par email si disponible, sinon par userIdentity
-	searchField := payload.Email
-	if searchField == "" {
-		searchField = payload.UserIdentity
+	// Déterminer les valeurs pour l'utilisateur
+	userName := payload.Name
+	if userName == "" {
+		userName = "Apple User"
 	}
 
-	// Vérifier si l'utilisateur existe déjà
-	err := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, COALESCE(avatar,'') as avatar, COALESCE(age,0) as age,
-		 COALESCE(weight,0) as weight, COALESCE(height,0) as height, COALESCE(goal,'') as goal,
-		 COALESCE(provider,'email') as provider, join_date, created_at, updated_at
-		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
-		searchField,
-	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-		&user.Goal, &user.Provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+	userEmail := payload.Email
+	if userEmail == "" {
+		userEmail = payload.UserIdentity + "@appleid.private"
+	}
 
-	// Si l'utilisateur n'existe pas, le créer
+	// Trouver ou créer l'utilisateur OAuth
+	user, err := utils.FindOrCreateOAuthUser(ctx, userEmail, userName, "", "apple")
 	if err != nil {
-		userName := payload.Name
-		if userName == "" {
-			userName = "Apple User"
-		}
-		userEmail := payload.Email
-		if userEmail == "" {
-			userEmail = payload.UserIdentity + "@appleid.private"
-		}
-
-		err = database.DB.QueryRow(ctx,
-			`INSERT INTO users(name, email, avatar, provider, age, weight, height, goal, join_date, created_at, updated_at, password_hash)
-			 VALUES($1, $2, '', 'apple', 0, 0, 0, '', NOW(), NOW(), NOW(), '')
-			 RETURNING id, name, email, avatar, age, weight, height, goal, join_date, created_at, updated_at`,
-			userName, userEmail,
-		).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-			&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
-
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
-			return
-		}
-
-		// Mise à jour de created_by
-		_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer/trouver l'utilisateur", err)
+		return
 	}
 
 	// Créer une session
-	token := uuid.NewString()
-	now := time.Now()
-
-	_, err = database.DB.Exec(ctx,
-		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
-		 VALUES($1, $2, $3, $4, true, $5, $6, $7)`,
-		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
-	)
+	ip, userAgent := utils.ExtractIPAndUserAgent(r)
+	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
 		return
 	}
 

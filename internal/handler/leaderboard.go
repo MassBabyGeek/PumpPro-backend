@@ -117,7 +117,7 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query leaderboard: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query leaderboard", err)
 		return
 	}
 	defer rows.Close()
@@ -129,7 +129,7 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 			&entry.UserID, &entry.UserName, &entry.Avatar,
 			&entry.Rank, &entry.Score, &entry.Change,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan leaderboard row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan leaderboard row", err)
 			return
 		}
 
@@ -239,7 +239,7 @@ func GetUserRank(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch user rank: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch user rank", err)
 		return
 	}
 
@@ -368,7 +368,7 @@ func GetNearbyUsers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query nearby users: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query nearby users", err)
 		return
 	}
 	defer rows.Close()
@@ -380,7 +380,7 @@ func GetNearbyUsers(w http.ResponseWriter, r *http.Request) {
 			&entry.UserID, &entry.UserName, &entry.Avatar,
 			&entry.Rank, &entry.Score, &entry.Change,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan nearby user row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan nearby user row", err)
 			return
 		}
 
@@ -486,7 +486,7 @@ func GetTopPerformers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query top performers: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query top performers", err)
 		return
 	}
 	defer rows.Close()
@@ -498,7 +498,7 @@ func GetTopPerformers(w http.ResponseWriter, r *http.Request) {
 			&entry.UserID, &entry.UserName, &entry.Avatar,
 			&entry.Rank, &entry.Score, &entry.Change,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan top performer row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan top performer row", err)
 			return
 		}
 
@@ -564,7 +564,7 @@ func GetChallengeLeaderboard(w http.ResponseWriter, r *http.Request) {
 	`, challengeID, limit)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query challenge leaderboard: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query challenge leaderboard", err)
 		return
 	}
 	defer rows.Close()
@@ -576,7 +576,7 @@ func GetChallengeLeaderboard(w http.ResponseWriter, r *http.Request) {
 			&entry.UserID, &entry.UserName, &entry.Avatar,
 			&entry.Rank, &entry.Score, &entry.Change,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan challenge leaderboard row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan challenge leaderboard row", err)
 			return
 		}
 
@@ -685,7 +685,7 @@ func GetFriendsLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query friends leaderboard: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query friends leaderboard", err)
 		return
 	}
 	defer rows.Close()
@@ -697,7 +697,7 @@ func GetFriendsLeaderboard(w http.ResponseWriter, r *http.Request) {
 			&entry.UserID, &entry.UserName, &entry.Avatar,
 			&entry.Rank, &entry.Score, &entry.Change,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan friends leaderboard row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan friends leaderboard row", err)
 			return
 		}
 

@@ -75,7 +75,7 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -92,7 +92,7 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 
@@ -136,7 +136,7 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "program not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "program not found", err)
 		return
 	}
 
@@ -152,7 +152,7 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 func CreateProgram(w http.ResponseWriter, r *http.Request) {
 	var program model.WorkoutProgram
 	if err := utils.DecodeJSON(r, &program); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -181,7 +181,7 @@ func CreateProgram(w http.ResponseWriter, r *http.Request) {
 	).Scan(&program.ID, &program.CreatedAt, &program.UpdatedAt)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create program: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not create program", err)
 		return
 	}
 
@@ -195,7 +195,7 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 
 	var program model.WorkoutProgram
 	if err := utils.DecodeJSON(r, &program); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -209,12 +209,12 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 	).Scan(&isCustom)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "program not found")
+		utils.ErrorSimple(w, http.StatusNotFound, "program not found")
 		return
 	}
 
 	if !isCustom {
-		utils.Error(w, http.StatusForbidden, "cannot modify non-custom program")
+		utils.ErrorSimple(w, http.StatusForbidden, "cannot modify non-custom program")
 		return
 	}
 
@@ -236,7 +236,7 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update program: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update program", err)
 		return
 	}
 
@@ -253,7 +253,7 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 		DeletedBy *string `json:"deletedBy"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -267,12 +267,12 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 	).Scan(&isCustom)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "program not found")
+		utils.ErrorSimple(w, http.StatusNotFound, "program not found")
 		return
 	}
 
 	if !isCustom {
-		utils.Error(w, http.StatusForbidden, "cannot delete non-custom program")
+		utils.ErrorSimple(w, http.StatusForbidden, "cannot delete non-custom program")
 		return
 	}
 
@@ -282,12 +282,12 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 	`, id, payload.DeletedBy)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not delete program: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not delete program", err)
 		return
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "program not found or already deleted")
+		utils.ErrorSimple(w, http.StatusNotFound, "program not found or already deleted")
 		return
 	}
 
@@ -317,7 +317,7 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 	`)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -334,7 +334,7 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 
@@ -371,7 +371,7 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 	`, difficulty)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -388,7 +388,7 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 
@@ -422,7 +422,7 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 	`, userID)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -439,7 +439,7 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 
@@ -462,7 +462,7 @@ func DuplicateProgram(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -488,7 +488,7 @@ func DuplicateProgram(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "program not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "program not found", err)
 		return
 	}
 
@@ -524,7 +524,7 @@ func DuplicateProgram(w http.ResponseWriter, r *http.Request) {
 	).Scan(&newProgram.ID, &newProgram.CreatedAt, &newProgram.UpdatedAt)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not duplicate program: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not duplicate program", err)
 		return
 	}
 
@@ -569,7 +569,7 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 	`)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -586,7 +586,7 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 
@@ -626,7 +626,7 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 	`, limit)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query programs: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
 		return
 	}
 	defer rows.Close()
@@ -643,7 +643,7 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan program row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
 

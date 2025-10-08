@@ -17,7 +17,7 @@ import (
 func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	var session model.WorkoutSession
 	if err := utils.DecodeJSON(r, &session); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -35,7 +35,7 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	).Scan(&session.ID, &session.CreatedAt, &session.UpdatedAt)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not save workout session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not save workout session", err)
 		return
 	}
 
@@ -46,7 +46,7 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		// Log l'erreur mais ne pas bloquer la création de la session
-		utils.Error(w, http.StatusInternalServerError, "could not update program usage count: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update program usage count", err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query workout sessions: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query workout sessions", err)
 		return
 	}
 	defer rows.Close()
@@ -132,7 +132,7 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
 			&s.CreatedAt, &s.UpdatedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan session row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
 		}
 		sessions = append(sessions, s)
@@ -191,7 +191,7 @@ func GetWorkoutStats(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch stats: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch stats", err)
 		return
 	}
 
@@ -217,12 +217,12 @@ func DeleteWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not delete session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not delete session", err)
 		return
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "session not found")
+		utils.ErrorSimple(w, http.StatusNotFound, "session not found")
 		return
 	}
 
@@ -251,7 +251,7 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "session not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "session not found", err)
 		return
 	}
 
@@ -265,7 +265,7 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	var updates map[string]interface{}
 	if err := utils.DecodeJSON(r, &updates); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -311,7 +311,7 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	_, err := database.DB.Exec(ctx, query, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update session", err)
 		return
 	}
 
@@ -331,7 +331,7 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch updated session: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch updated session", err)
 		return
 	}
 
@@ -374,7 +374,7 @@ func GetWorkoutSummary(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch summary: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch summary", err)
 		return
 	}
 
@@ -416,7 +416,7 @@ func GetPersonalRecords(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch session records: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch session records", err)
 		return
 	}
 
@@ -429,7 +429,7 @@ func GetPersonalRecords(w http.ResponseWriter, r *http.Request) {
 	`, userID).Scan(&records.MaxRepsInSet)
 
 	if err != nil && err != sql.ErrNoRows {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch set records: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch set records", err)
 		return
 	}
 
@@ -443,7 +443,7 @@ func SaveSetResults(w http.ResponseWriter, r *http.Request) {
 
 	var setResults []model.SetResult
 	if err := utils.DecodeJSON(r, &setResults); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -459,7 +459,7 @@ func SaveSetResults(w http.ResponseWriter, r *http.Request) {
 		)
 
 		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not save set result: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not save set result", err)
 			return
 		}
 	}
@@ -482,7 +482,7 @@ func GetSetResults(w http.ResponseWriter, r *http.Request) {
 	`, sessionID)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
 		return
 	}
 	defer rows.Close()
@@ -493,7 +493,7 @@ func GetSetResults(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(
 			&r.ID, &r.SessionID, &r.SetNumber, &r.TargetReps, &r.CompletedReps, &r.Duration, &r.Timestamp,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
 			return
 		}
 		results = append(results, r)

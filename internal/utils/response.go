@@ -26,9 +26,19 @@ func Success(w http.ResponseWriter, data interface{}) {
 	JSON(w, http.StatusOK, APIResponse{Success: true, Data: data})
 }
 
-func Error(w http.ResponseWriter, status int, err string) {
-	fmt.Printf("[ERROR][%d] %s\n", status, err)
-	JSON(w, status, APIResponse{Success: false, Error: err})
+// Error gère les erreurs HTTP avec logging automatique
+func Error(w http.ResponseWriter, status int, message string, err error) {
+	errMsg := message
+	if err != nil {
+		errMsg = fmt.Sprintf("%s: %v", message, err)
+	}
+	fmt.Printf("[ERROR][%d] %s\n", status, errMsg)
+	JSON(w, status, APIResponse{Success: false, Error: errMsg})
+}
+
+// ErrorSimple pour les erreurs sans objet error (rétrocompatibilité)
+func ErrorSimple(w http.ResponseWriter, status int, message string) {
+	Error(w, status, message, nil)
 }
 
 func Message(w http.ResponseWriter, msg string) {

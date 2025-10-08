@@ -15,7 +15,7 @@ import (
 func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var user model.UserProfile
 	if err := utils.DecodeJSON(r, &user); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
@@ -34,7 +34,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	).Scan(&user.ID, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt, &user.CreatedBy)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not create user", err)
 		return
 	}
 
@@ -44,14 +44,14 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var user model.UserProfile
 	if err := utils.DecodeJSON(r, &user); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
 		return
 	}
 
 	vars := mux.Vars(r)
 	userID := vars["id"]
 	if userID == "" {
-		utils.Error(w, http.StatusBadRequest, "missing user ID in URL")
+		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
 	}
 
@@ -72,7 +72,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update user", err)
 		return
 	}
 
@@ -93,7 +93,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 		WHERE deleted_at IS NULL
 	`)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query users: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query users", err)
 		return
 	}
 	defer rows.Close()
@@ -107,7 +107,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 			&u.JoinDate, &u.CreatedAt, &u.UpdatedAt,
 			&u.CreatedBy, &u.UpdatedBy, &u.DeletedAt, &u.DeletedBy,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan user row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan user row", err)
 			return
 		}
 		users = append(users, u)
@@ -138,7 +138,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not get user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not get user", err)
 		return
 	}
 
@@ -148,13 +148,13 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	token, err := utils.GetToken(r)
 	if err != nil {
-		utils.Error(w, http.StatusBadRequest, "missing token"+err.Error())
+		utils.Error(w, http.StatusBadRequest, "token manquant", err)
 		return
 	}
 
 	user, err := utils.GetUserByToken(token)
 	if err != nil {
-		utils.Error(w, http.StatusUnauthorized, "Cant get user by token: "+err.Error())
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return
 	}
 
@@ -166,12 +166,12 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		user.ID, user.ID,
 	)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not delete user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "impossible de supprimer l'utilisateur", err)
 		return
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "user not found or already deleted")
+		utils.ErrorSimple(w, http.StatusNotFound, "utilisateur introuvable ou déjà supprimé")
 		return
 	}
 
@@ -213,7 +213,7 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch stats: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch stats", err)
 		return
 	}
 
@@ -271,7 +271,7 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 	`, days, userID)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch chart data: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch chart data", err)
 		return
 	}
 	defer rows.Close()
@@ -288,7 +288,7 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 		var date string
 		var data DayData
 		if err := rows.Scan(&date, &data.PushUps, &data.Duration, &data.Calories); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan chart data: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan chart data", err)
 			return
 		}
 		data.Date = date
@@ -308,7 +308,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 	file, handler, err := r.FormFile("avatar")
 	if err != nil {
-		utils.Error(w, http.StatusBadRequest, "no file uploaded")
+		utils.Error(w, http.StatusBadRequest, "aucun fichier uploadé", err)
 		return
 	}
 	defer file.Close()
@@ -316,7 +316,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	// Vérifier le type de fichier
 	contentType := handler.Header.Get("Content-Type")
 	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/jpg" {
-		utils.Error(w, http.StatusBadRequest, "only JPEG and PNG images are allowed")
+		utils.ErrorSimple(w, http.StatusBadRequest, "seules les images JPEG et PNG sont autorisées")
 		return
 	}
 
@@ -333,7 +333,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update avatar: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update avatar", err)
 		return
 	}
 
@@ -349,7 +349,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch updated user: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch updated user", err)
 		return
 	}
 

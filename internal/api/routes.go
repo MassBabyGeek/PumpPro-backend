@@ -4,11 +4,15 @@ import (
 	"net/http"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/handler"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	"github.com/gorilla/mux"
 )
 
 func SetupRouter() http.Handler {
 	r := mux.NewRouter()
+
+	// Appliquer le middleware de logging
+	r.Use(middleware.LoggerMiddleware)
 
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)

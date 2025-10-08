@@ -96,7 +96,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query challenges: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query challenges", err)
 		return
 	}
 	defer rows.Close()
@@ -111,7 +111,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
 			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
 		challenges = append(challenges, c)
@@ -149,7 +149,7 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "challenge not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "challenge not found", err)
 		return
 	}
 
@@ -160,7 +160,7 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 func CreateChallenge(w http.ResponseWriter, r *http.Request) {
 	var challenge model.Challenge
 	if err := utils.DecodeJSON(r, &challenge); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -187,7 +187,7 @@ func CreateChallenge(w http.ResponseWriter, r *http.Request) {
 	).Scan(&challenge.ID, &challenge.CreatedAt, &challenge.UpdatedAt)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create challenge: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not create challenge", err)
 		return
 	}
 
@@ -201,7 +201,7 @@ func UpdateChallenge(w http.ResponseWriter, r *http.Request) {
 
 	var challenge model.Challenge
 	if err := utils.DecodeJSON(r, &challenge); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -223,7 +223,7 @@ func UpdateChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not update challenge: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not update challenge", err)
 		return
 	}
 
@@ -240,7 +240,7 @@ func DeleteChallenge(w http.ResponseWriter, r *http.Request) {
 		DeletedBy *string `json:"deletedBy"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -251,12 +251,12 @@ func DeleteChallenge(w http.ResponseWriter, r *http.Request) {
 	`, id, payload.DeletedBy)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not delete challenge: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not delete challenge", err)
 		return
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "challenge not found or already deleted")
+		utils.ErrorSimple(w, http.StatusNotFound, "challenge not found or already deleted")
 		return
 	}
 
@@ -272,7 +272,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -286,12 +286,12 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	).Scan(&exists)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not check like: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not check like", err)
 		return
 	}
 
 	if exists {
-		utils.Error(w, http.StatusBadRequest, "challenge already liked")
+		utils.ErrorSimple(w, http.StatusBadRequest, "challenge already liked")
 		return
 	}
 
@@ -302,7 +302,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not add like: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not add like", err)
 		return
 	}
 
@@ -313,7 +313,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not increment likes: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not increment likes", err)
 		return
 	}
 
@@ -340,7 +340,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
 	}
 
@@ -362,12 +362,12 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not remove like: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not remove like", err)
 		return
 	}
 
 	if res.RowsAffected() == 0 {
-		utils.Error(w, http.StatusNotFound, "like not found")
+		utils.ErrorSimple(w, http.StatusNotFound, "like not found")
 		return
 	}
 
@@ -378,7 +378,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not decrement likes: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not decrement likes", err)
 		return
 	}
 
@@ -405,7 +405,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
 	}
 
@@ -421,7 +421,7 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -435,7 +435,7 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	).Scan(&targetReps)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "challenge not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "challenge not found", err)
 		return
 	}
 
@@ -447,12 +447,12 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	).Scan(&exists)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not check progress: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not check progress", err)
 		return
 	}
 
 	if exists {
-		utils.Error(w, http.StatusBadRequest, "challenge already started")
+		utils.ErrorSimple(w, http.StatusBadRequest, "challenge already started")
 		return
 	}
 
@@ -469,7 +469,7 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not create progress: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
 		return
 	}
 
@@ -480,7 +480,7 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not increment participants: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not increment participants", err)
 		return
 	}
 
@@ -496,7 +496,7 @@ func CompleteChallenge(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 	}
 	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -516,7 +516,7 @@ func CompleteChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "progress not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "progress not found", err)
 		return
 	}
 
@@ -527,7 +527,7 @@ func CompleteChallenge(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not increment completions: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not increment completions", err)
 		return
 	}
 
@@ -554,7 +554,7 @@ func GetUserChallengeProgress(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		utils.Error(w, http.StatusNotFound, "progress not found: "+err.Error())
+		utils.Error(w, http.StatusNotFound, "progress not found", err)
 		return
 	}
 
@@ -582,7 +582,7 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 	`, userID)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query challenges: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query challenges", err)
 		return
 	}
 	defer rows.Close()
@@ -597,7 +597,7 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
 			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
 		challenges = append(challenges, c)
@@ -627,7 +627,7 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 	`, userID)
 
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query challenges: "+err.Error())
+		utils.Error(w, http.StatusInternalServerError, "could not query challenges", err)
 		return
 	}
 	defer rows.Close()
@@ -642,7 +642,7 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
 			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row: "+err.Error())
+			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
 		challenges = append(challenges, c)
