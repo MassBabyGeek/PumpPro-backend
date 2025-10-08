@@ -27,6 +27,9 @@ var publicRoutes = []string{
 
 var exceptionRoutes = []string{
 	"/auth/logout",
+	"/user/stats",
+	"/user/avatar",
+	"/user/stats",
 }
 
 // Vérifie si une route fait partie des routes publiques
