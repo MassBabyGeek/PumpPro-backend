@@ -113,5 +113,8 @@ func SetupRouter() http.Handler {
 		color.Yellow("[404] %s %s (route non trouvée)", r.Method, r.URL.Path)
 		http.Error(w, "Route not found", http.StatusNotFound)
 	})
+
+	r.PathPrefix("/").Handler(authenticatedRoutes)
+
 	return r
 }
