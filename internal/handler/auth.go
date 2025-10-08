@@ -299,3 +299,160 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 
 	utils.Success(w, session)
 }
+
+// GoogleAuth gère l'authentification via Google OAuth
+func GoogleAuth(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		IDToken string `json:"idToken"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Avatar  string `json:"avatar"`
+	}
+	if err := utils.DecodeJSON(r, &payload); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validation basique
+	if payload.Email == "" {
+		utils.Error(w, http.StatusBadRequest, "email is required")
+		return
+	}
+
+	ctx := context.Background()
+	var user model.UserProfile
+
+	// Vérifier si l'utilisateur existe déjà
+	err := database.DB.QueryRow(ctx,
+		`SELECT id, name, email, COALESCE(avatar,'') as avatar, COALESCE(age,0) as age,
+		 COALESCE(weight,0) as weight, COALESCE(height,0) as height, COALESCE(goal,'') as goal,
+		 COALESCE(provider,'email') as provider, join_date, created_at, updated_at
+		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
+		payload.Email,
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
+		&user.Goal, &user.Provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+
+	// Si l'utilisateur n'existe pas, le créer
+	if err != nil {
+		err = database.DB.QueryRow(ctx,
+			`INSERT INTO users(name, email, avatar, provider, age, weight, height, goal, join_date, created_at, updated_at, password_hash)
+			 VALUES($1, $2, $3, 'google', 0, 0, 0, '', NOW(), NOW(), NOW(), '')
+			 RETURNING id, name, email, avatar, age, weight, height, goal, join_date, created_at, updated_at`,
+			payload.Name, payload.Email, payload.Avatar,
+		).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
+			&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
+			return
+		}
+
+		// Mise à jour de created_by
+		_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
+	}
+
+	// Créer une session
+	token := uuid.NewString()
+	now := time.Now()
+
+	_, err = database.DB.Exec(ctx,
+		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
+		 VALUES($1, $2, $3, $4, true, $5, $6, $7)`,
+		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
+	)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		return
+	}
+
+	utils.Success(w, map[string]interface{}{
+		"user":  user,
+		"token": token,
+	})
+}
+
+// AppleAuth gère l'authentification via Apple Sign In
+func AppleAuth(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		IDToken      string `json:"idToken"`
+		Email        string `json:"email"`
+		Name         string `json:"name"`
+		UserIdentity string `json:"userIdentity"`
+	}
+	if err := utils.DecodeJSON(r, &payload); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validation basique
+	if payload.Email == "" && payload.UserIdentity == "" {
+		utils.Error(w, http.StatusBadRequest, "email or userIdentity is required")
+		return
+	}
+
+	ctx := context.Background()
+	var user model.UserProfile
+
+	// Chercher par email si disponible, sinon par userIdentity
+	searchField := payload.Email
+	if searchField == "" {
+		searchField = payload.UserIdentity
+	}
+
+	// Vérifier si l'utilisateur existe déjà
+	err := database.DB.QueryRow(ctx,
+		`SELECT id, name, email, COALESCE(avatar,'') as avatar, COALESCE(age,0) as age,
+		 COALESCE(weight,0) as weight, COALESCE(height,0) as height, COALESCE(goal,'') as goal,
+		 COALESCE(provider,'email') as provider, join_date, created_at, updated_at
+		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
+		searchField,
+	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
+		&user.Goal, &user.Provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+
+	// Si l'utilisateur n'existe pas, le créer
+	if err != nil {
+		userName := payload.Name
+		if userName == "" {
+			userName = "Apple User"
+		}
+		userEmail := payload.Email
+		if userEmail == "" {
+			userEmail = payload.UserIdentity + "@appleid.private"
+		}
+
+		err = database.DB.QueryRow(ctx,
+			`INSERT INTO users(name, email, avatar, provider, age, weight, height, goal, join_date, created_at, updated_at, password_hash)
+			 VALUES($1, $2, '', 'apple', 0, 0, 0, '', NOW(), NOW(), NOW(), '')
+			 RETURNING id, name, email, avatar, age, weight, height, goal, join_date, created_at, updated_at`,
+			userName, userEmail,
+		).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
+			&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not create user: "+err.Error())
+			return
+		}
+
+		// Mise à jour de created_by
+		_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
+	}
+
+	// Créer une session
+	token := uuid.NewString()
+	now := time.Now()
+
+	_, err = database.DB.Exec(ctx,
+		`INSERT INTO sessions(user_id, token, ip_address, user_agent, is_active, created_at, expires_at, created_by)
+		 VALUES($1, $2, $3, $4, true, $5, $6, $7)`,
+		user.ID, token, r.RemoteAddr, r.UserAgent(), now, now.Add(24*time.Hour), user.ID,
+	)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not create session: "+err.Error())
+		return
+	}
+
+	utils.Success(w, map[string]interface{}{
+		"user":  user,
+		"token": token,
+	})
+}

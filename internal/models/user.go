@@ -23,6 +23,7 @@ type UserProfile struct {
 	Weight   float64   `json:"weight,omitempty"`
 	Height   float64   `json:"height,omitempty"`
 	Goal     string    `json:"goal,omitempty"`
+	Provider string    `json:"provider,omitempty"` // email, google, apple
 	JoinDate time.Time `json:"joinDate,omitempty"`
 	AuditFields
 }
