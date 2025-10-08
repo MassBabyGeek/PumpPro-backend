@@ -49,6 +49,7 @@ type WorkoutSession struct {
 	Notes        sql.NullString `json:"notes,omitempty"`
 	CreatedAt    time.Time      `json:"createdAt"`
 	UpdatedAt    time.Time      `json:"updatedAt"`
+	Sets         []SetResult    `json:"sets"`
 }
 
 type SetResult struct {

@@ -39,6 +39,23 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sauvegarder les sets s'ils sont fournis
+	if len(session.Sets) > 0 {
+		for _, set := range session.Sets {
+			_, err := database.DB.Exec(ctx, `
+				INSERT INTO set_results(session_id, set_number, target_reps, completed_reps, duration, timestamp)
+				VALUES($1, $2, $3, $4, $5, $6)
+			`,
+				session.ID, set.SetNumber, set.TargetReps, set.CompletedReps, set.Duration, set.Timestamp,
+			)
+
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "could not save set result", err)
+				return
+			}
+		}
+	}
+
 	// Incrémenter le usage_count du programme
 	_, err = database.DB.Exec(ctx,
 		`UPDATE workout_programs SET usage_count = usage_count + 1 WHERE id = $1`,
@@ -136,6 +153,36 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sessions = append(sessions, s)
+	}
+
+	// Charger les sets pour chaque session
+	for i := range sessions {
+		setRows, err := database.DB.Query(ctx, `
+			SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+			FROM set_results
+			WHERE session_id = $1
+			ORDER BY set_number ASC
+		`, sessions[i].ID)
+
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+			return
+		}
+
+		var sets []model.SetResult
+		for setRows.Next() {
+			var s model.SetResult
+			if err := setRows.Scan(
+				&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
+			); err != nil {
+				setRows.Close()
+				utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+				return
+			}
+			sets = append(sets, s)
+		}
+		setRows.Close()
+		sessions[i].Sets = sets
 	}
 
 	utils.Success(w, sessions)
@@ -255,6 +302,33 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Charger les sets associés
+	rows, err := database.DB.Query(ctx, `
+		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+		FROM set_results
+		WHERE session_id = $1
+		ORDER BY set_number ASC
+	`, sessionID)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+		return
+	}
+	defer rows.Close()
+
+	var sets []model.SetResult
+	for rows.Next() {
+		var s model.SetResult
+		if err := rows.Scan(
+			&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
+		); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+			return
+		}
+		sets = append(sets, s)
+	}
+	session.Sets = sets
+
 	utils.Success(w, session)
 }
 
@@ -334,6 +408,33 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch updated session", err)
 		return
 	}
+
+	// Charger les sets associés
+	rows, err := database.DB.Query(ctx, `
+		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+		FROM set_results
+		WHERE session_id = $1
+		ORDER BY set_number ASC
+	`, sessionID)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+		return
+	}
+	defer rows.Close()
+
+	var sets []model.SetResult
+	for rows.Next() {
+		var s model.SetResult
+		if err := rows.Scan(
+			&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
+		); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+			return
+		}
+		sets = append(sets, s)
+	}
+	session.Sets = sets
 
 	utils.Success(w, session)
 }
