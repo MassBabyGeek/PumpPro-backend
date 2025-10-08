@@ -219,10 +219,6 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats.TotalCalories = float64(stats.TotalPushUps) * 0.29
 
-	// TODO: Calculer les streaks (série de jours consécutifs)
-	stats.CurrentStreak = 0
-	stats.LongestStreak = 0
-
 	utils.Success(w, stats)
 }
 
