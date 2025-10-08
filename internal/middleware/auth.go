@@ -25,8 +25,17 @@ var publicRoutes = []string{
 	"/health",
 }
 
+var exceptionRoutes = []string{
+	"/auth/logout",
+}
+
 // Vérifie si une route fait partie des routes publiques
 func isPublicRoute(path string) bool {
+	for _, route := range exceptionRoutes {
+		if strings.HasPrefix(path, route) {
+			return false
+		}
+	}
 	for _, route := range publicRoutes {
 		if strings.HasPrefix(path, route) {
 			return true
