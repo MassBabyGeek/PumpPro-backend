@@ -107,7 +107,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c model.Challenge
 		if err := rows.Scan(
-			c.ID, c.Title, c.Description, c.Category, c.Type, c.Variant, c.Difficulty,
+			id, c.Title, c.Description, c.Category, c.Type, c.Variant, c.Difficulty,
 			c.TargetReps, c.Duration, c.Sets, c.RepsPerSet, c.ImageURL,
 			c.IconName, c.IconColor, c.Participants, c.Completions, c.Likes, c.Points,
 			c.Badge, c.StartDate, c.EndDate, c.Status, pq.Array(c.Tags), c.IsOfficial,
