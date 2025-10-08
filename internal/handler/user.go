@@ -49,15 +49,14 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	userID := vars["id"]
-	if userID == "" {
-		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return
 	}
 
 	ctx := context.Background()
-	_, err := database.DB.Exec(ctx,
+	_, err = database.DB.Exec(ctx,
 		`UPDATE users
 		 SET name = COALESCE(NULLIF($1, ''), name),
 		     avatar = COALESCE(NULLIF($2, ''), avatar),
@@ -69,8 +68,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		     updated_by = $7
 		 WHERE id = $8 AND deleted_at IS NULL`,
 		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal,
-		userID, // ici UpdatedBy = userID pour l'instant
-		userID,
+		user.ID, // ici UpdatedBy = userID pour l'instant
+		user.ID,
 	)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not update user", err)
@@ -115,6 +114,16 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Success(w, users)
+}
+
+func GetMe(w http.ResponseWriter, r *http.Request) {
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	utils.Success(w, user)
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
@@ -292,8 +301,11 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 
 // UploadAvatar gère l'upload d'avatar utilisateur
 func UploadAvatar(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := vars["id"]
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
 
 	// Limiter la taille du fichier à 10MB
 	r.ParseMultipartForm(10 << 20)
@@ -314,14 +326,14 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: En production, uploader le fichier vers un service de stockage (S3, Cloud Storage, etc.)
 	// Pour l'instant, on simule l'URL
-	avatarURL := "https://api.pompeurpro.com/avatars/" + userID + ".jpg"
+	avatarURL := "https://api.pompeurpro.com/avatars/" + user.ID + ".jpg"
 
 	ctx := context.Background()
 
 	// Mettre à jour l'avatar dans la base de données
 	_, err = database.DB.Exec(ctx,
 		`UPDATE users SET avatar=$1, updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL`,
-		avatarURL, userID,
+		avatarURL, user.ID,
 	)
 
 	if err != nil {
@@ -330,12 +342,11 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Récupérer le profil mis à jour
-	var user model.UserProfile
 	err = database.DB.QueryRow(ctx, `
 		SELECT id, name, email, COALESCE(avatar,'') as avatar, age, weight, height, COALESCE(goal,'') as goal,
 		       join_date, created_at, updated_at
 		FROM users WHERE id=$1 AND deleted_at IS NULL
-	`, userID).Scan(
+	`, user.ID).Scan(
 		&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
 		&user.Goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
 	)

@@ -10,14 +10,16 @@ import (
 
 func SetupRouter() http.Handler {
 	r := mux.NewRouter()
+	authenticatedRoutes := mux.NewRouter()
 
 	// Appliquer le middleware de logging
 	r.Use(middleware.LoggerMiddleware)
-	r.Use(middleware.AuthMiddleware)
+	authenticatedRoutes.Use(middleware.LoggerMiddleware)
+	authenticatedRoutes.Use(middleware.AuthMiddleware)
 
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)
-	r.HandleFunc("/auth/logout", handler.Logout).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/auth/logout", handler.Logout).Methods(http.MethodPost)
 	r.HandleFunc("/auth/signup", handler.Signup).Methods(http.MethodPost)
 	r.HandleFunc("/auth/register", handler.Register).Methods(http.MethodPost)
 	r.HandleFunc("/auth/reset-password", handler.ResetPassword).Methods(http.MethodPost)
@@ -27,27 +29,28 @@ func SetupRouter() http.Handler {
 
 	// Users
 	r.HandleFunc("/users", handler.CreateUser).Methods(http.MethodPost)
-	r.HandleFunc("/users", handler.DeleteUser).Methods(http.MethodDelete)
-	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
 	r.HandleFunc("/users", handler.GetUsers).Methods(http.MethodGet)
-	r.HandleFunc("/users/{id}", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
-	r.HandleFunc("/users/stats/{selectedPeriod}", handler.GetUserStats).Methods(http.MethodGet)
-	r.HandleFunc("/users/{id}/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
-	r.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/users", handler.DeleteUser).Methods(http.MethodDelete)
+	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users/me", handler.GetMe).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/users/stats/{selectedPeriod}", handler.GetUserStats).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/users/avatar", handler.UploadAvatar).Methods(http.MethodPost)
 
 	// Challenges
 	r.HandleFunc("/challenges", handler.GetChallenges).Methods(http.MethodGet)
 	r.HandleFunc("/challenges/{id}", handler.GetChallengeById).Methods(http.MethodGet)
-	r.HandleFunc("/challenges", handler.CreateChallenge).Methods(http.MethodPost)
-	r.HandleFunc("/challenges/{id}", handler.UpdateChallenge).Methods(http.MethodPut)
-	r.HandleFunc("/challenges/{id}", handler.DeleteChallenge).Methods(http.MethodDelete)
+	authenticatedRoutes.HandleFunc("/challenges", handler.CreateChallenge).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.UpdateChallenge).Methods(http.MethodPut)
+	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.DeleteChallenge).Methods(http.MethodDelete)
 
 	// Challenge interactions
-	r.HandleFunc("/challenges/{id}/like", handler.LikeChallenge).Methods(http.MethodPost)
-	r.HandleFunc("/challenges/{id}/like", handler.UnlikeChallenge).Methods(http.MethodDelete)
-	r.HandleFunc("/challenges/{id}/start", handler.StartChallenge).Methods(http.MethodPost)
-	r.HandleFunc("/challenges/{id}/complete", handler.CompleteChallenge).Methods(http.MethodPost)
-	r.HandleFunc("/challenges/{id}/progress", handler.GetUserChallengeProgress).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/like", handler.LikeChallenge).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/like", handler.UnlikeChallenge).Methods(http.MethodDelete)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/start", handler.StartChallenge).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/complete", handler.CompleteChallenge).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/progress", handler.GetUserChallengeProgress).Methods(http.MethodGet)
 
 	// User challenges
 	r.HandleFunc("/users/{userId}/challenges/active", handler.GetUserActiveChallenges).Methods(http.MethodGet)

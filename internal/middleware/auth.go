@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
@@ -19,52 +18,9 @@ const (
 	tokenContextKey = contextKey("token")
 )
 
-// Liste des routes publiques (aucune auth requise)
-var publicRoutes = []string{
-	"/auth/",
-	"/health",
-}
-
-var exceptionRoutes = []string{
-	"/auth/logout",
-	"/user/stats",
-	"/user/avatar",
-	"/user/stats",
-}
-
-// Vérifie si une route fait partie des routes publiques
-func isPublicRoute(path string) bool {
-	for _, route := range exceptionRoutes {
-		if strings.HasPrefix(path, route) {
-			return false
-		}
-	}
-	for _, route := range publicRoutes {
-		if strings.HasPrefix(path, route) {
-			return true
-		}
-	}
-	return false
-}
-
 // AuthMiddleware récupère le token, charge l'utilisateur et l'injecte dans le contexte
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		method := r.Method
-
-		// ✅ 1. Toutes les routes GET → publiques
-		if method == http.MethodGet {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// ✅ 2. Toutes les routes /auth/* → publiques
-		if isPublicRoute(path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// Récupérer le token depuis l’en-tête Authorization
 		token := r.Header.Get("Authorization")
 		if token == "" {
