@@ -73,6 +73,7 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/programs/difficulty/{difficulty}", handler.GetProgramsByDifficulty).Methods(http.MethodGet)
 
 	// Workout Sessions
+	r.HandleFunc("/workouts", handler.GetWorkoutSessions).Methods(http.MethodGet)
 	r.HandleFunc("/workouts", handler.SaveWorkoutSession).Methods(http.MethodPost)
 	r.HandleFunc("/workouts/{id}", handler.GetWorkoutSession).Methods(http.MethodGet)
 	r.HandleFunc("/workouts/{id}", handler.UpdateWorkoutSession).Methods(http.MethodPatch)

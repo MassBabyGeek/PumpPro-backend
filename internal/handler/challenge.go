@@ -8,8 +8,41 @@ import (
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 )
+
+func ScanChallenges(rows pgx.Rows) ([]model.Challenge, error) {
+	var challenges []model.Challenge
+
+	for rows.Next() {
+		var c model.Challenge
+		if err := rows.Scan(
+			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
+			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
+			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
+			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
+			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		challenges = append(challenges, c)
+	}
+
+	return challenges, nil
+}
+
+func ScanChallenge(rows pgx.Rows) (model.Challenge, error) {
+	var challenge model.Challenge
+	err := rows.Scan(
+		&challenge.ID, &challenge.Title, &challenge.Description, &challenge.Category, &challenge.Type, &challenge.Variant, &challenge.Difficulty,
+		&challenge.TargetReps, &challenge.Duration, &challenge.Sets, &challenge.RepsPerSet, &challenge.ImageURL,
+		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions, &challenge.Likes, &challenge.Points,
+		&challenge.Badge, &challenge.StartDate, &challenge.EndDate, &challenge.Status, pq.Array(&challenge.Tags), &challenge.IsOfficial,
+		&challenge.CreatedBy, &challenge.UpdatedBy, &challenge.DeletedBy, &challenge.CreatedAt, &challenge.UpdatedAt, &challenge.DeletedAt,
+	)
+	return challenge, err
+}
 
 // GetChallenges récupère tous les challenges avec filtres optionnels
 func GetChallenges(w http.ResponseWriter, r *http.Request) {
@@ -105,11 +138,11 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c model.Challenge
 		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
-			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
-			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
-			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
-			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+			c.ID, c.Title, c.Description, c.Category, c.Type, c.Variant, c.Difficulty,
+			c.TargetReps, c.Duration, c.Sets, c.RepsPerSet, c.ImageURL,
+			c.IconName, c.IconColor, c.Participants, c.Completions, c.Likes, c.Points,
+			c.Badge, c.StartDate, c.EndDate, c.Status, pq.Array(c.Tags), c.IsOfficial,
+			c.CreatedBy, c.UpdatedBy, c.DeletedBy, c.CreatedAt, c.UpdatedAt, c.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
