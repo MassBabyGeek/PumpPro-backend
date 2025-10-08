@@ -31,7 +31,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
+			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE deleted_at IS NULL
@@ -133,7 +133,7 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
+			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1 AND deleted_at IS NULL
@@ -171,7 +171,7 @@ func CreateChallenge(w http.ResponseWriter, r *http.Request) {
 			title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
+			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
 			created_by, created_at, updated_at
 		) VALUES(
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW()
@@ -324,7 +324,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
+			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
@@ -389,7 +389,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
+			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
@@ -573,7 +573,7 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 			c.id, c.title, c.description, c.category, c.type, c.variant, c.difficulty,
 			c.target_reps, c.duration, c.sets, c.reps_per_set, c.image_url,
 			c.icon_name, c.icon_color, c.participants, c.completions, c.likes, c.points,
-			c.badge, c.start_date, c.end_date, c.status, c.tags, c.is_official,
+			c.badge, c.start_date, c.end_date, c.status, COALESCE(c.tags, '{}') AS tags, c.is_official,
 			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at
 		FROM challenges c
 		INNER JOIN user_challenge_progress ucp ON c.id = ucp.challenge_id
