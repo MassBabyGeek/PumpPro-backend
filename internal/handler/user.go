@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
@@ -49,7 +50,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := r.URL.Query().Get("id")
+	vars := mux.Vars(r)
+	userId := vars["id"]
 	if userId == "" {
 		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
@@ -163,7 +165,8 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := r.URL.Query().Get("id")
+	vars := mux.Vars(r)
+	userId := vars["id"]
 	if userId == "" {
 		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
@@ -196,15 +199,50 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
-	userId := r.URL.Query().Get("id")
+	vars := mux.Vars(r)
+	userId := vars["id"]
+	period := vars["period"]
+
 	if userId == "" {
 		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
 	}
 
-	selectedPeriod := r.URL.Query().Get("selectedPeriod")
-	if selectedPeriod == "" {
+	if period == "" {
 		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de récupérer la période")
+		return
+	}
+
+	var startDate, endDate time.Time
+	now := time.Now()
+
+	switch period {
+	case "daily", "today":
+		// Début et fin de la journée
+		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		endDate = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
+
+	case "weekly", "week":
+		// Début de la semaine (lundi) et fin (dimanche)
+		weekday := int(now.Weekday())
+		if weekday == 0 { // dimanche
+			weekday = 7
+		}
+		startDate = time.Date(now.Year(), now.Month(), now.Day()-weekday+1, 0, 0, 0, 0, now.Location())
+		endDate = startDate.AddDate(0, 0, 6).Add(time.Hour*23 + time.Minute*59 + time.Second*59)
+
+	case "monthly", "month":
+		// Début et fin du mois
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		endDate = startDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+	case "yearly", "year":
+		// Début et fin de l'année
+		startDate = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+		endDate = time.Date(now.Year(), 12, 31, 23, 59, 59, 999999999, now.Location())
+
+	default:
+		utils.ErrorSimple(w, http.StatusBadRequest, "période invalide")
 		return
 	}
 
@@ -220,7 +258,7 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 			COALESCE(AVG(total_reps), 0) as averagePushUps,
 		FROM workout_sessions
 		WHERE user_id = $1 AND start_time >= $2 AND start_time <= $3
-	`, userId).Scan(
+	`, userId, startDate, endDate).Scan(
 		&stats.TotalWorkouts,
 		&stats.TotalPushUps,
 		&stats.TotalTime,
@@ -319,7 +357,8 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userId := r.URL.Query().Get("id")
+	vars := mux.Vars(r)
+	userId := vars["id"]
 	if userId == "" {
 		utils.ErrorSimple(w, http.StatusBadRequest, "ID utilisateur manquant")
 		return
