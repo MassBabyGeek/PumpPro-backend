@@ -104,7 +104,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Si on arrive ici, le token et l’utilisateur sont valides
-		ctx = context.WithValue(r.Context(), userContextKey, user)
+		ctx = context.WithValue(ctx, userContextKey, user)
 		ctx = context.WithValue(ctx, tokenContextKey, token)
 
 		// Appeler le handler suivant avec ce contexte enrichi
