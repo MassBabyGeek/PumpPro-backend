@@ -5,25 +5,32 @@ import (
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
+	"github.com/fatih/color"
 )
 
-// LoggerMiddleware log toutes les requêtes HTTP
+// LoggerMiddleware log toutes les requêtes HTTP, même les 404
 func LoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// Log la requête entrante
 		utils.LogRequest(r.Method, r.URL.Path, r.RemoteAddr)
 
-		// Wrapper pour capturer le status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-		// Appeler le handler suivant
 		next.ServeHTTP(wrapped, r)
 
-		// Log la durée et le status code
 		duration := time.Since(start)
-		utils.LogInfo("%s %s - Status: %d - Duration: %v", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		status := wrapped.statusCode
+
+		// Coloriser selon le statut
+		switch {
+		case status >= 500:
+			color.Red("[SERVER ERROR] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
+		case status >= 400:
+			color.Yellow("[CLIENT ERROR] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
+		default:
+			color.Green("[OK] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
+		}
 	})
 }
 
