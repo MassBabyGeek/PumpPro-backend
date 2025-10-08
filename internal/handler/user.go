@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -200,6 +201,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	fmt.Printf("[INFO][GetUserStats] vars: %s\n", vars)
 	userId := vars["id"]
 	period := vars["period"]
 
