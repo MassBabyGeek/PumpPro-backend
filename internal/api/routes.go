@@ -14,7 +14,7 @@ func SetupRouter() http.Handler {
 	r := mux.NewRouter()
 	r.Use(middleware.LoggerMiddleware)
 
-	authenticatedRoutes := r.NewRoute().Subrouter()
+	authenticatedRoutes := r.PathPrefix("/").Subrouter()
 	authenticatedRoutes.Use(middleware.LoggerMiddleware)
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
 
