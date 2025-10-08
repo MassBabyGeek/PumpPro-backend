@@ -1,17 +1,13 @@
 package model
 
-import (
-	"database/sql"
-)
-
 type LeaderboardEntry struct {
-	UserID   string         `json:"userId"`
-	UserName string         `json:"userName"`
-	Avatar   sql.NullString `json:"avatar,omitempty"`
-	Rank     int            `json:"rank"`
-	Score    int            `json:"score"` // Total push-ups, points, etc.
-	Change   sql.NullInt32  `json:"change,omitempty"` // Changement de position
-	Badges   []string       `json:"badges,omitempty"`
+	UserID   string   `json:"userId"`
+	UserName string   `json:"userName"`
+	Avatar   *string  `json:"avatar,omitempty"`
+	Rank     int      `json:"rank"`
+	Score    int      `json:"score"`
+	Change   *int     `json:"change,omitempty"`
+	Badges   []string `json:"badges,omitempty"`
 }
 
 type UserRank struct {
