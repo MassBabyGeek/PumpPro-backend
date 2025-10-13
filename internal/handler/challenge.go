@@ -118,11 +118,11 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	query := r.URL.Query()
 
-	// Récupérer le userID optionnel depuis les query params
-	userIDParam := query.Get("userId")
+	// Récupérer l'utilisateur depuis le contexte (OptionalAuth)
+	user, _ := middleware.GetUserFromContext(r)
 	var userID *string
-	if userIDParam != "" {
-		userID = &userIDParam
+	if user.ID != "" {
+		userID = &user.ID
 	}
 
 	filters := map[string]string{
@@ -136,19 +136,49 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	searchQuery := query.Get("searchQuery")
 	sortBy := query.Get("sortBy")
 
-	sqlQuery := `
-		SELECT
-			id, title, description, category, type, variant, difficulty,
-			target_reps, duration, sets, reps_per_set, image_url,
-			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
-			created_by, updated_by, created_at, updated_at
-		FROM challenges
-		WHERE deleted_at IS NULL
-	`
-
 	args := []interface{}{}
 	argCount := 1
+
+	// Base SELECT
+	sqlQuery := `
+		SELECT
+			c.id, c.title, c.description, c.category,
+				c.type, c.variant, c.difficulty, c.target_reps, c.duration,
+				c.sets, c.reps_per_set, c.image_url, c.icon_name, c.icon_color,
+				c.participants, c.completions, c.likes, c.points, c.badge,
+				c.start_date, c.end_date, c.status, c.tags, c.is_official,
+				c.created_by, c.updated_by, c.created_at, c.updated_at,
+				c.deleted_by, c.deleted_at
+	`
+
+	// Ajouter les colonnes user seulement si userID est présent
+	if userID != nil {
+		sqlQuery += `,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = c.id
+				AND uctp.user_id = $` + strconv.Itoa(argCount) + `
+				AND uctp.completed = TRUE
+				LIMIT 1
+			), FALSE) AS user_completed,
+			FALSE AS user_liked,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = c.id
+				AND uctp.user_id = $` + strconv.Itoa(argCount) + `
+				LIMIT 1
+			), FALSE) AS user_participated
+		`
+		args = append(args, *userID)
+		argCount++
+	}
+
+	sqlQuery += `
+		FROM challenges c
+		WHERE deleted_at IS NULL
+	`
 
 	// Filtres dynamiques
 	for col, val := range filters {
@@ -198,7 +228,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Charger les tasks du challenge avec la progression utilisateur
+		// Charger les tasks
 		tasks, err := loadChallengeTasks(ctx, challenge.ID, userID)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
