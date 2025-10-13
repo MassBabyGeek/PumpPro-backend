@@ -249,13 +249,26 @@ func ScanChallengeTask(scanner interface {
 		return nil, err
 	}
 
+	// on récupère les pointeurs
+	createdAtPtr := utils.NullTimeToPointer(createdAt)
+	updatedAtPtr := utils.NullTimeToPointer(updatedAt)
+	deletedAtPtr := utils.NullTimeToPointer(deletedAt)
+
 	task.DateFields = model.DateFields{
 		CreatedBy: utils.NullStringToPointer(createdBy),
 		UpdatedBy: utils.NullStringToPointer(updatedBy),
 		DeletedBy: utils.NullStringToPointer(deletedBy),
-		CreatedAt: *utils.NullTimeToPointer(createdAt),
-		UpdatedAt: *utils.NullTimeToPointer(updatedAt),
-		DeletedAt: *utils.NullTimeToPointer(deletedAt),
+	}
+
+	// assignations protégées
+	if createdAtPtr != nil {
+		task.DateFields.CreatedAt = *createdAtPtr
+	}
+	if updatedAtPtr != nil {
+		task.DateFields.UpdatedAt = *updatedAtPtr
+	}
+	if deletedAtPtr != nil {
+		task.DateFields.DeletedAt = *deletedAtPtr
 	}
 
 	return &task, nil
@@ -266,14 +279,25 @@ func ScanUserChallengeTaskProgress(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.UserChallengeTaskProgress, error) {
 	var progress model.UserChallengeTaskProgress
+	var completedAt, createdAt, updatedAt sql.NullTime
 
 	err := scanner.Scan(
 		&progress.ID, &progress.UserID, &progress.TaskID, &progress.ChallengeID,
-		&progress.Completed, &progress.CompletedAt, &progress.Score, &progress.Attempts,
-		&progress.CreatedAt, &progress.UpdatedAt,
+		&progress.Completed, &completedAt, &progress.Score, &progress.Attempts,
+		&createdAt, &updatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if completedAt.Valid {
+		progress.CompletedAt = &completedAt.Time
+	}
+	if createdAt.Valid {
+		progress.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		progress.UpdatedAt = updatedAt.Time
 	}
 
 	return &progress, nil
