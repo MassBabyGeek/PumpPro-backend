@@ -196,7 +196,7 @@ func GetUserRank(w http.ResponseWriter, r *http.Request) {
 			)
 			SELECT
 				COALESCE(ru.rank, (SELECT total FROM total_count) + 1) as rank,
-				COALESCE(ru.score, 0) as score,
+				ru.score as score,
 				(SELECT total FROM total_count) as total_users
 			FROM ranked_users ru
 			RIGHT JOIN (SELECT $1::uuid as uid) u ON ru.user_id = u.uid
@@ -224,7 +224,7 @@ func GetUserRank(w http.ResponseWriter, r *http.Request) {
 			)
 			SELECT
 				COALESCE(ru.rank, (SELECT total FROM total_count) + 1) as rank,
-				COALESCE(ru.score, 0) as score,
+				ru.score as score,
 				(SELECT total FROM total_count) as total_users
 			FROM ranked_users ru
 			RIGHT JOIN (SELECT $2::uuid as uid) u ON ru.user_id = u.uid

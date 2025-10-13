@@ -15,8 +15,9 @@ func SetupRouter() http.Handler {
 	r.Use(middleware.LoggerMiddleware)
 
 	authenticatedRoutes := r.PathPrefix("/").Subrouter()
-	authenticatedRoutes.Use(middleware.LoggerMiddleware)
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
+	authenticatedRoutes.Use(middleware.LoggerMiddleware)
+	
 
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)
@@ -33,10 +34,10 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/users", handler.GetUsers).Methods(http.MethodGet)
 	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{id}", handler.DeleteUser).Methods(http.MethodDelete)
-	authenticatedRoutes.HandleFunc("/users/{id}", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/users/{id}/stats/{period}", handler.GetUserStats).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{id}/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
-	authenticatedRoutes.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/users/{id}", handler.UpdateUser).Methods(http.MethodPut, http.MethodPatch)
 
 	// Challenges
 	r.HandleFunc("/challenges", handler.GetChallenges).Methods(http.MethodGet)

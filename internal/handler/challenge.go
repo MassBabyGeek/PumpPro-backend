@@ -2,12 +2,12 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 )
@@ -32,8 +32,8 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+			badge, start_date, end_date, status, tags, is_official,
+			created_by, updated_by, created_at, updated_at
 		FROM challenges
 		WHERE deleted_at IS NULL
 	`
@@ -102,21 +102,23 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var id uuid.UUID
 	var challenges []model.Challenge
 	for rows.Next() {
 		var c model.Challenge
+		var updatedBy sql.NullString
+
 		if err := rows.Scan(
-			id, c.Title, c.Description, c.Category, c.Type, c.Variant, c.Difficulty,
-			c.TargetReps, c.Duration, c.Sets, c.RepsPerSet, c.ImageURL,
-			c.IconName, c.IconColor, c.Participants, c.Completions, c.Likes, c.Points,
-			c.Badge, c.StartDate, c.EndDate, c.Status, pq.Array(c.Tags), c.IsOfficial,
-			c.CreatedBy, c.UpdatedBy, c.DeletedBy, c.CreatedAt, c.UpdatedAt, c.DeletedAt,
+			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
+			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
+			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
+			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
+			&c.CreatedBy, &updatedBy, &c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
-		c.ID = id.String()
+
+		c.UpdatedBy = utils.NullStringToPointer(updatedBy)
 		challenges = append(challenges, c)
 	}
 
@@ -130,14 +132,15 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	var challenge model.Challenge
+	var updatedBy sql.NullString
 
 	err := database.DB.QueryRow(ctx, `
 		SELECT
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+			badge, start_date, end_date, status, tags, is_official,
+			created_by, updated_by, created_at, updated_at
 		FROM challenges
 		WHERE id=$1 AND deleted_at IS NULL
 	`, id).Scan(
@@ -147,8 +150,7 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions,
 		&challenge.Likes, &challenge.Points, &challenge.Badge, &challenge.StartDate, &challenge.EndDate,
 		&challenge.Status, pq.Array(&challenge.Tags), &challenge.IsOfficial,
-		&challenge.CreatedBy, &challenge.UpdatedBy, &challenge.DeletedBy,
-		&challenge.CreatedAt, &challenge.UpdatedAt, &challenge.DeletedAt,
+		&challenge.CreatedBy, &updatedBy, &challenge.CreatedAt, &challenge.UpdatedAt,
 	)
 
 	if err != nil {
@@ -156,6 +158,7 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	challenge.UpdatedBy = utils.NullStringToPointer(updatedBy)
 	utils.Success(w, challenge)
 }
 
@@ -174,7 +177,7 @@ func CreateChallenge(w http.ResponseWriter, r *http.Request) {
 			title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
+			badge, start_date, end_date, status, tags, is_official,
 			created_by, created_at, updated_at
 		) VALUES(
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW()
@@ -327,7 +330,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
+			badge, start_date, end_date, status, tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
@@ -392,7 +395,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, COALESCE(tags, '{}') AS tags, is_official,
+			badge, start_date, end_date, status, tags, is_official,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
@@ -433,7 +436,7 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	// Récupérer les infos du challenge
 	var targetReps int
 	err := database.DB.QueryRow(ctx,
-		`SELECT COALESCE(target_reps, 0) FROM challenges WHERE id=$1 AND deleted_at IS NULL`,
+		`SELECT target_reps FROM challenges WHERE id=$1 AND deleted_at IS NULL`,
 		challengeID,
 	).Scan(&targetReps)
 
@@ -576,7 +579,7 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 			c.id, c.title, c.description, c.category, c.type, c.variant, c.difficulty,
 			c.target_reps, c.duration, c.sets, c.reps_per_set, c.image_url,
 			c.icon_name, c.icon_color, c.participants, c.completions, c.likes, c.points,
-			c.badge, c.start_date, c.end_date, c.status, COALESCE(c.tags, '{}') AS tags, c.is_official,
+			c.badge, c.start_date, c.end_date, c.status, c.tags, c.is_official,
 			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at
 		FROM challenges c
 		INNER JOIN user_challenge_progress ucp ON c.id = ucp.challenge_id

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"time"
 
@@ -190,7 +191,7 @@ func GetSessions(w http.ResponseWriter, r *http.Request) {
 		SELECT
 			id, user_id, token, expires_at, is_active,
 			ip_address, user_agent,
-			created_at, updated_at, created_by, updated_by, deleted_at, deleted_by
+			created_at, updated_at, created_by, updated_by
 		FROM sessions
 		WHERE deleted_at IS NULL
 	`)
@@ -203,14 +204,19 @@ func GetSessions(w http.ResponseWriter, r *http.Request) {
 	var sessions []Session
 	for rows.Next() {
 		var s Session
+		var createdBy, updatedBy sql.NullString
+
 		if err := rows.Scan(
 			&s.ID, &s.UserID, &s.Token, &s.ExpiresAt, &s.IsActive,
 			&s.IP, &s.UserAgent,
-			&s.CreatedAt, &s.UpdatedAt, &s.CreatedBy, &s.UpdatedBy, &s.DeletedAt, &s.DeletedBy,
+			&s.CreatedAt, &s.UpdatedAt, &createdBy, &updatedBy,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "erreur de lecture des sessions", err)
 			return
 		}
+
+		s.CreatedBy = utils.NullStringToPointer(createdBy)
+		s.UpdatedBy = utils.NullStringToPointer(updatedBy)
 		sessions = append(sessions, s)
 	}
 
@@ -223,21 +229,26 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	var session Session
+	var createdBy, updatedBy sql.NullString
+
 	err := database.DB.QueryRow(ctx,
 		`SELECT id, user_id, token, expires_at, is_active,
 			ip_address, user_agent,
-			created_at, updated_at, created_by, updated_by, deleted_at, deleted_by
+			created_at, updated_at, created_by, updated_by
 		 FROM sessions WHERE id=$1 AND deleted_at IS NULL`,
 		id,
 	).Scan(&session.ID, &session.UserID, &session.Token, &session.ExpiresAt, &session.IsActive,
 		&session.IP, &session.UserAgent,
-		&session.CreatedAt, &session.UpdatedAt, &session.CreatedBy, &session.UpdatedBy, &session.DeletedAt, &session.DeletedBy,
+		&session.CreatedAt, &session.UpdatedAt, &createdBy, &updatedBy,
 	)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "impossible de récupérer la session", err)
 		return
 	}
+
+	session.CreatedBy = utils.NullStringToPointer(createdBy)
+	session.UpdatedBy = utils.NullStringToPointer(updatedBy)
 
 	utils.Success(w, session)
 }
