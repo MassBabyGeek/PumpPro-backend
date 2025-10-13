@@ -50,6 +50,7 @@ type ChallengeTask struct {
 	RepsPerSet    *int                       `json:"repsPerSet,omitempty"`
 	ScheduledDate *time.Time                 `json:"scheduledDate,omitempty"`
 	IsLocked      bool                       `json:"isLocked"`
+	Score         *int                       `json:"score,omitempty"`
 	UserProgress  *UserChallengeTaskProgress `json:"userProgress,omitempty"`
 	DateFields
 }

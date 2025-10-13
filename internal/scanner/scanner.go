@@ -9,7 +9,6 @@ import (
 )
 
 // ScanUserProfile scanne une ligne SQL vers un UserProfile
-// Utilise les types sql.Null* et les convertit automatiquement
 func ScanUserProfile(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.UserProfile, error) {
@@ -29,7 +28,6 @@ func ScanUserProfile(scanner interface {
 		return nil, err
 	}
 
-	// Conversions
 	user.Avatar = utils.NullStringToString(avatar)
 	user.Goal = utils.NullStringToString(goal)
 	user.Age = utils.NullInt64ToInt(age)
@@ -60,7 +58,6 @@ func ScanChallenge(scanner interface {
 		return nil, err
 	}
 
-	// Conversions
 	c.Tags = utils.NullStringToStringArray(tagsNull)
 	c.UpdatedBy = utils.NullStringToPointer(updatedBy)
 	c.StartDate = utils.NullTimeToPointer(startDate)
@@ -69,21 +66,39 @@ func ScanChallenge(scanner interface {
 	return &c, nil
 }
 
-// ScanChallengeWithPqArray scanne une ligne SQL vers un Challenge avec pq.Array pour les tags
+// ✅ ScanChallengeWithPqArray corrigée (NullTime-safe)
 func ScanChallengeWithPqArray(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.Challenge, error) {
 	var c model.Challenge
+	var startDate, endDate, createdAt, updatedAt, deletedAt sql.NullTime
+	var createdBy, updatedBy, deletedBy sql.NullString
 
 	err := scanner.Scan(
 		&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
 		&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
 		&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
-		&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
-		&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		&c.Badge, &startDate, &endDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
+		&createdBy, &updatedBy, &deletedBy, &createdAt, &updatedAt, &deletedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	c.CreatedBy = utils.NullStringToPointer(createdBy)
+	c.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	c.DeletedBy = utils.NullStringToPointer(deletedBy)
+	c.StartDate = utils.NullTimeToPointer(startDate)
+	c.EndDate = utils.NullTimeToPointer(endDate)
+
+	if createdAt.Valid {
+		c.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		c.UpdatedAt = updatedAt.Time
+	}
+	if deletedAt.Valid {
+		c.DeletedAt = deletedAt.Time
 	}
 
 	return &c, nil
@@ -94,7 +109,6 @@ func ScanWorkoutSession(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.WorkoutSession, error) {
 	var s model.WorkoutSession
-
 	err := scanner.Scan(
 		&s.ID, &s.ProgramID, &s.UserID, &s.StartTime, &s.EndTime,
 		&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
@@ -103,7 +117,6 @@ func ScanWorkoutSession(scanner interface {
 	if err != nil {
 		return nil, err
 	}
-
 	return &s, nil
 }
 
@@ -112,7 +125,6 @@ func ScanSetResult(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.SetResult, error) {
 	var s model.SetResult
-
 	err := scanner.Scan(
 		&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps,
 		&s.CompletedReps, &s.Duration, &s.Timestamp,
@@ -120,30 +132,44 @@ func ScanSetResult(scanner interface {
 	if err != nil {
 		return nil, err
 	}
-
 	return &s, nil
 }
 
-// ScanWorkoutProgramWithJSON scanne une ligne SQL vers un WorkoutProgram
-// Utilise []byte pour reps_sequence qui sera décodé en JSON
+// ✅ ScanWorkoutProgramWithJSON corrigée (NullTime-safe)
 func ScanWorkoutProgramWithJSON(scanner interface {
 	Scan(dest ...interface{}) error
 }, unmarshalJSON func([]byte, interface{}) error) (*model.WorkoutProgram, error) {
 	var p model.WorkoutProgram
 	var repsSequenceJSON []byte
+	var createdAt, updatedAt, deletedAt sql.NullTime
+	var createdBy, updatedBy, deletedBy sql.NullString
 
 	err := scanner.Scan(
 		&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 		&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 		&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
 		&p.IsCustom, &p.IsFeatured, &p.UsageCount,
-		&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
+		&createdBy, &updatedBy, &deletedBy,
+		&createdAt, &updatedAt, &deletedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Décoder reps_sequence si présent
+	p.CreatedBy = utils.NullStringToPointer(createdBy)
+	p.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	p.DeletedBy = utils.NullStringToPointer(deletedBy)
+
+	if createdAt.Valid {
+		p.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		p.UpdatedAt = updatedAt.Time
+	}
+	if deletedAt.Valid {
+		p.DeletedAt = deletedAt.Time
+	}
+
 	if repsSequenceJSON != nil {
 		unmarshalJSON(repsSequenceJSON, &p.RepsSequence)
 	}
@@ -157,6 +183,7 @@ func ScanWorkoutProgram(scanner interface {
 }) (*model.WorkoutProgram, error) {
 	var p model.WorkoutProgram
 	var repsSequence pq.Int64Array
+	var createdAt, updatedAt, deletedAt sql.NullTime
 
 	err := scanner.Scan(
 		&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty,
@@ -164,13 +191,22 @@ func ScanWorkoutProgram(scanner interface {
 		&p.Sets, &p.RepsPerSet, &repsSequence, &p.RepsPerMinute, &p.TotalMinutes,
 		&p.IsCustom, &p.IsFeatured, &p.UsageCount,
 		&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy,
-		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
+		&createdAt, &updatedAt, &deletedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Conversion de pq.Int64Array vers []int
+	if createdAt.Valid {
+		p.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		p.UpdatedAt = updatedAt.Time
+	}
+	if deletedAt.Valid {
+		p.DeletedAt = deletedAt.Time
+	}
+
 	if len(repsSequence) > 0 {
 		p.RepsSequence = make([]int, len(repsSequence))
 		for i, v := range repsSequence {
@@ -182,7 +218,6 @@ func ScanWorkoutProgram(scanner interface {
 }
 
 // ScanStats scanne une ligne SQL vers un Stats
-// Utilise directement les types sql.Null* et les convertit
 func ScanStats(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.Stats, error) {
@@ -191,12 +226,7 @@ func ScanStats(scanner interface {
 	var totalCalories, averagePushUps sql.NullFloat64
 
 	err := scanner.Scan(
-		&totalWorkouts,
-		&totalPushUps,
-		&totalTime,
-		&bestSession,
-		&totalCalories,
-		&averagePushUps,
+		&totalWorkouts, &totalPushUps, &totalTime, &bestSession, &totalCalories, &averagePushUps,
 	)
 	if err != nil {
 		return nil, err
@@ -217,14 +247,23 @@ func ScanUserChallengeProgress(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.UserChallengeProgress, error) {
 	var progress model.UserChallengeProgress
+	var completedAt, createdAt, updatedAt sql.NullTime
 
 	err := scanner.Scan(
 		&progress.ID, &progress.ChallengeID, &progress.UserID, &progress.Progress,
-		&progress.CurrentReps, &progress.TargetReps, &progress.Attempts, &progress.CompletedAt,
-		&progress.CreatedAt, &progress.UpdatedAt,
+		&progress.CurrentReps, &progress.TargetReps, &progress.Attempts,
+		&completedAt, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	progress.CompletedAt = utils.NullTimeToPointer(completedAt)
+	if createdAt.Valid {
+		progress.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		progress.UpdatedAt = updatedAt.Time
 	}
 
 	return &progress, nil
@@ -241,7 +280,7 @@ func ScanChallengeTask(scanner interface {
 	err := scanner.Scan(
 		&task.ID, &task.ChallengeID, &task.Day, &task.Title, &task.Description,
 		&task.Type, &task.Variant, &task.TargetReps, &task.Duration, &task.Sets, &task.RepsPerSet,
-		&task.ScheduledDate, &task.IsLocked,
+		&task.Score, &task.ScheduledDate, &task.IsLocked,
 		&createdBy, &updatedBy, &deletedBy,
 		&createdAt, &updatedAt, &deletedAt,
 	)
@@ -249,26 +288,20 @@ func ScanChallengeTask(scanner interface {
 		return nil, err
 	}
 
-	// on récupère les pointeurs
-	createdAtPtr := utils.NullTimeToPointer(createdAt)
-	updatedAtPtr := utils.NullTimeToPointer(updatedAt)
-	deletedAtPtr := utils.NullTimeToPointer(deletedAt)
-
 	task.DateFields = model.DateFields{
 		CreatedBy: utils.NullStringToPointer(createdBy),
 		UpdatedBy: utils.NullStringToPointer(updatedBy),
 		DeletedBy: utils.NullStringToPointer(deletedBy),
 	}
 
-	// assignations protégées
-	if createdAtPtr != nil {
-		task.DateFields.CreatedAt = *createdAtPtr
+	if createdAt.Valid {
+		task.DateFields.CreatedAt = createdAt.Time
 	}
-	if updatedAtPtr != nil {
-		task.DateFields.UpdatedAt = *updatedAtPtr
+	if updatedAt.Valid {
+		task.DateFields.UpdatedAt = updatedAt.Time
 	}
-	if deletedAtPtr != nil {
-		task.DateFields.DeletedAt = *deletedAtPtr
+	if deletedAt.Valid {
+		task.DateFields.DeletedAt = deletedAt.Time
 	}
 
 	return &task, nil
@@ -290,9 +323,7 @@ func ScanUserChallengeTaskProgress(scanner interface {
 		return nil, err
 	}
 
-	if completedAt.Valid {
-		progress.CompletedAt = &completedAt.Time
-	}
+	progress.CompletedAt = utils.NullTimeToPointer(completedAt)
 	if createdAt.Valid {
 		progress.CreatedAt = createdAt.Time
 	}

@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
@@ -19,7 +21,7 @@ func loadChallengeTasks(ctx context.Context, challengeID string, userID *string)
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, challenge_id, day, title, description, type, variant,
-			target_reps, duration, sets, reps_per_set,
+			target_reps, duration, sets, reps_per_set, score
 			scheduled_date, is_locked, created_by, updated_by, deleted_by,
 			created_at, updated_at, deleted_at
 		FROM challenge_tasks
@@ -53,13 +55,61 @@ func loadChallengeTasks(ctx context.Context, challengeID string, userID *string)
 			if err == nil {
 				task.UserProgress = progress
 			}
-			// Si pas de progression trouvée, on laisse UserProgress à nil
 		}
 
 		tasks = append(tasks, *task)
 	}
 
 	return tasks, nil
+}
+
+func loadChallengeTask(ctx context.Context, challengeTaskId string, userID *string) (*model.ChallengeTask, error) {
+	rows, err := database.DB.Query(ctx,
+		`SELECT
+			id, challenge_id, day, title, description, type, variant,
+			target_reps, duration, sets, reps_per_set, score,
+			scheduled_date, is_locked, created_by, updated_by, deleted_by,
+			created_at, updated_at, deleted_at
+		FROM challenge_tasks
+		WHERE id=$1 AND deleted_at IS NULL`,
+		challengeTaskId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var task *model.ChallengeTask
+
+	if rows.Next() {
+		task, err = scanner.ScanChallengeTask(rows)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("task not found")
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Charger la progression utilisateur si demandée
+	if userID != nil && *userID != "" {
+		progressRow := database.DB.QueryRow(ctx, `
+			SELECT
+				id, user_id, task_id, challenge_id, completed, completed_at,
+				score, attempts, created_at, updated_at
+			FROM user_challenge_task_progress
+			WHERE task_id = $1 AND user_id = $2
+		`, challengeTaskId, *userID)
+
+		progress, err := scanner.ScanUserChallengeTaskProgress(progressRow)
+		if err == nil {
+			task.UserProgress = progress
+		}
+	}
+
+	return task, nil
 }
 
 // GetChallenges récupère tous les challenges avec filtres optionnels
@@ -691,74 +741,35 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, challenges)
 }
 
-
 // CompleteTask marque une task comme complétée
 func CompleteTask(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	challengeID := vars["challengeId"]
 	taskID := vars["taskId"]
 
-	var payload struct {
-		UserID string `json:"userId"`
-		Score  *int   `json:"score,omitempty"`
-	}
-	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return
 	}
+
+	fmt.Printf("[INFO][CompleteTask] User: %s, Task: %s\n", user.ID, taskID)
 
 	ctx := context.Background()
-
-	// Vérifier que la task existe et appartient au challenge
-	var exists bool
-	err := database.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM challenge_tasks WHERE id=$1 AND challenge_id=$2 AND deleted_at IS NULL)`,
-		taskID, challengeID,
-	).Scan(&exists)
-
-	if err != nil || !exists {
-		utils.ErrorSimple(w, http.StatusNotFound, "task not found")
+	task, err := loadChallengeTask(ctx, taskID, &user.ID)
+	if err != nil {
+		utils.Error(w, http.StatusNotFound, "task not found", err)
 		return
 	}
 
-	// Vérifier si un enregistrement de progression existe déjà
-	var progressID string
-	var attempts int
-	err = database.DB.QueryRow(ctx,
-		`SELECT id, attempts FROM user_challenge_task_progress WHERE task_id=$1 AND user_id=$2`,
-		taskID, payload.UserID,
-	).Scan(&progressID, &attempts)
-
-	var progress *model.UserChallengeTaskProgress
-
-	if err == nil {
-		// Update existing progress
-		row := database.DB.QueryRow(ctx, `
-			UPDATE user_challenge_task_progress
-			SET completed=true, completed_at=NOW(), score=$1, attempts=attempts+1, updated_at=NOW()
-			WHERE id=$2
-			RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
-		`, payload.Score, progressID)
-
-		progress, err = scanner.ScanUserChallengeTaskProgress(row)
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not update progress", err)
-			return
-		}
-	} else {
-		// Create new progress
-		row := database.DB.QueryRow(ctx, `
-			INSERT INTO user_challenge_task_progress(user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at)
-			VALUES($1, $2, $3, true, NOW(), $4, 1, NOW(), NOW())
-			RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
-		`, payload.UserID, taskID, challengeID, payload.Score)
-
-		progress, err = scanner.ScanUserChallengeTaskProgress(row)
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
-			return
-		}
+	_, err = database.DB.Exec(ctx, `
+		INSERT INTO user_challenge_task_progress(user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at)
+		VALUES($1, $2, $3, true, NOW(), $4, 1, NOW(), NOW())
+		RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
+	`, user.ID, task.ID, task.ChallengeID, task.Score)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
+		return
 	}
 
-	utils.Success(w, progress)
+	utils.Success(w, task)
 }
