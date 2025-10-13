@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
@@ -15,18 +17,19 @@ import (
 // GetChallenges récupère tous les challenges avec filtres optionnels
 func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
-
-	// Récupérer les paramètres de filtrage depuis la query string
 	query := r.URL.Query()
-	category := query.Get("category")
-	difficulty := query.Get("difficulty")
-	challengeType := query.Get("type")
-	variant := query.Get("variant")
-	status := query.Get("status")
+
+	filters := map[string]string{
+		"category":   query.Get("category"),
+		"difficulty": query.Get("difficulty"),
+		"type":       query.Get("type"),
+		"variant":    query.Get("variant"),
+		"status":     query.Get("status"),
+	}
+
 	searchQuery := query.Get("searchQuery")
 	sortBy := query.Get("sortBy")
 
-	// Construction de la requête SQL avec filtres
 	sqlQuery := `
 		SELECT
 			id, title, description, category, type, variant, difficulty,
@@ -41,57 +44,36 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	args := []interface{}{}
 	argCount := 1
 
-	if category != "" {
-		sqlQuery += " AND category = $" + string(rune(argCount+'0'))
-		args = append(args, category)
-		argCount++
+	// Filtres dynamiques
+	for col, val := range filters {
+		if val != "" {
+			sqlQuery += " AND " + col + " = $" + strconv.Itoa(argCount)
+			args = append(args, val)
+			argCount++
+		}
 	}
 
-	if difficulty != "" {
-		sqlQuery += " AND difficulty = $" + string(rune(argCount+'0'))
-		args = append(args, difficulty)
-		argCount++
-	}
-
-	if challengeType != "" {
-		sqlQuery += " AND type = $" + string(rune(argCount+'0'))
-		args = append(args, challengeType)
-		argCount++
-	}
-
-	if variant != "" {
-		sqlQuery += " AND variant = $" + string(rune(argCount+'0'))
-		args = append(args, variant)
-		argCount++
-	}
-
-	if status != "" {
-		sqlQuery += " AND status = $" + string(rune(argCount+'0'))
-		args = append(args, status)
-		argCount++
-	}
-
+	// Recherche textuelle
 	if searchQuery != "" {
-		sqlQuery += " AND (LOWER(title) LIKE $" + string(rune(argCount+'0')) +
-			" OR LOWER(description) LIKE $" + string(rune(argCount+'0')) + ")"
-		searchPattern := "%" + searchQuery + "%"
-		args = append(args, searchPattern)
-		argCount++
+		sqlQuery += " AND (LOWER(title) LIKE $" + strconv.Itoa(argCount) +
+			" OR LOWER(description) LIKE $" + strconv.Itoa(argCount+1) + ")"
+		searchPattern := "%" + strings.ToLower(searchQuery) + "%"
+		args = append(args, searchPattern, searchPattern)
+		argCount += 2
 	}
 
-	// Ajouter le tri
-	switch sortBy {
-	case "POPULAR":
-		sqlQuery += " ORDER BY completions DESC"
-	case "LIKED":
-		sqlQuery += " ORDER BY likes DESC"
-	case "RECENT":
-		sqlQuery += " ORDER BY start_date DESC NULLS LAST"
-	case "DIFFICULTY":
-		sqlQuery += " ORDER BY CASE difficulty WHEN 'BEGINNER' THEN 1 WHEN 'INTERMEDIATE' THEN 2 WHEN 'ADVANCED' THEN 3 END"
-	case "POINTS":
-		sqlQuery += " ORDER BY points DESC"
-	default:
+	// Tri
+	sortMap := map[string]string{
+		"POPULAR":    "completions DESC",
+		"LIKED":      "likes DESC",
+		"RECENT":     "start_date DESC NULLS LAST",
+		"DIFFICULTY": "CASE difficulty WHEN 'BEGINNER' THEN 1 WHEN 'INTERMEDIATE' THEN 2 WHEN 'ADVANCED' THEN 3 END",
+		"POINTS":     "points DESC",
+	}
+
+	if order, ok := sortMap[strings.ToUpper(sortBy)]; ok {
+		sqlQuery += " ORDER BY " + order
+	} else {
 		sqlQuery += " ORDER BY created_at DESC"
 	}
 
@@ -120,6 +102,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Conversion utilitaire
 		c.Tags = utils.NullStringToStringArray(tagsNull)
 		c.UpdatedBy = utils.NullStringToPointer(updatedBy)
 		c.StartDate = utils.NullTimeToPointer(startDate)
