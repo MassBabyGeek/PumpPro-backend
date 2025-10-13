@@ -21,7 +21,7 @@ func loadChallengeTasks(ctx context.Context, challengeID string, userID *string)
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, challenge_id, day, title, description, type, variant,
-			target_reps, duration, sets, reps_per_set, score
+			target_reps, duration, sets, reps_per_set, score,
 			scheduled_date, is_locked, created_by, updated_by, deleted_by,
 			created_at, updated_at, deleted_at
 		FROM challenge_tasks
