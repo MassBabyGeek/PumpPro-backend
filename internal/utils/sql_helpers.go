@@ -2,6 +2,7 @@ package utils
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -84,4 +85,23 @@ func NullBoolToPointer(nb sql.NullBool) *bool {
 		return &nb.Bool
 	}
 	return nil
+}
+
+func NullStringToStringArray(ns sql.NullString) []string {
+	if !ns.Valid || ns.String == "" {
+		return []string{}
+	}
+
+	// Enlever les accolades { }
+	s := strings.Trim(ns.String, "{}")
+	if s == "" {
+		return []string{}
+	}
+
+	// Séparer par virgule
+	parts := strings.Split(s, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
 }
