@@ -30,6 +30,7 @@ type Challenge struct {
 	UserCompleted    bool            `json:"userCompleted,omitempty"`
 	UserLiked        bool            `json:"userLiked,omitempty"`
 	UserParticipated bool            `json:"userParticipated,omitempty"`
+	OverallProgress  *int            `json:"overallProgress,omitempty"`
 	Tags             []string        `json:"tags,omitempty"`
 	IsOfficial       bool            `json:"isOfficial"`
 	Tasks            []ChallengeTask `json:"challengeTasks,omitempty"`

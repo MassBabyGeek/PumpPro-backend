@@ -17,6 +17,23 @@ import (
 	"github.com/lib/pq"
 )
 
+// calculateOverallProgress calcule la progression globale d'un challenge pour un utilisateur
+func calculateOverallProgress(tasks []model.ChallengeTask) *int {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	completedTasks := 0
+	for _, task := range tasks {
+		if task.UserProgress != nil && task.UserProgress.Completed {
+			completedTasks++
+		}
+	}
+
+	progress := (completedTasks * 100) / len(tasks)
+	return &progress
+}
+
 // loadChallengeTasks charge les tasks d'un challenge avec la progression utilisateur optionnelle
 func loadChallengeTasks(ctx context.Context, challengeID string, userID *string) ([]model.ChallengeTask, error) {
 	rows, err := database.DB.Query(ctx, `
@@ -139,7 +156,7 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	args := []interface{}{}
 	argCount := 1
 
-	// Base SELECT
+	// Base SELECT - Always include user columns (with FALSE if no user)
 	sqlQuery := `
 		SELECT
 			c.id, c.title, c.description, c.category,
@@ -148,12 +165,12 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 				c.participants, c.completions, c.likes, c.points, c.badge,
 				c.start_date, c.end_date, c.status, c.tags, c.is_official,
 				c.created_by, c.updated_by, c.created_at, c.updated_at,
-				c.deleted_by, c.deleted_at
+				c.deleted_by, c.deleted_at,
 	`
 
-	// Ajouter les colonnes user seulement si userID est présent
+	// Add user columns dynamically based on authentication
 	if userID != nil {
-		sqlQuery += `,
+		sqlQuery += `
 			COALESCE((
 				SELECT TRUE
 				FROM user_challenge_task_progress uctp
@@ -173,6 +190,13 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 		`
 		args = append(args, *userID)
 		argCount++
+	} else {
+		// Add default FALSE values when no user is authenticated
+		sqlQuery += `
+			FALSE AS user_completed,
+			FALSE AS user_liked,
+			FALSE AS user_participated
+		`
 	}
 
 	sqlQuery += `
@@ -235,6 +259,11 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		challenge.Tasks = tasks
+
+		// Calculer la progression globale si l'utilisateur est connecté
+		if userID != nil {
+			challenge.OverallProgress = calculateOverallProgress(tasks)
+		}
 
 		challenges = append(challenges, *challenge)
 	}
@@ -324,6 +353,11 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	challenge.Tasks = tasks
+
+	// Calculer la progression globale si l'utilisateur est connecté
+	if userID != nil {
+		challenge.OverallProgress = calculateOverallProgress(tasks)
+	}
 
 	utils.Success(w, challenge)
 }
