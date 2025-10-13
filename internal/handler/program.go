@@ -8,6 +8,7 @@ import (
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 )
@@ -82,26 +83,12 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 
 	var programs []model.WorkoutProgram
 	for rows.Next() {
-		var p model.WorkoutProgram
-		var repsSequenceJSON []byte
-
-		if err := rows.Scan(
-			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
-			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
-			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
-			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
-		); err != nil {
+		program, err := scanner.ScanWorkoutProgramWithJSON(rows, json.Unmarshal)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
-
-		// Décoder reps_sequence si présent
-		if repsSequenceJSON != nil {
-			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
-		}
-
-		programs = append(programs, p)
+		programs = append(programs, *program)
 	}
 
 	utils.Success(w, programs)
@@ -113,10 +100,8 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	ctx := context.Background()
-	var program model.WorkoutProgram
-	var repsSequenceJSON []byte
 
-	err := database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
@@ -125,24 +110,12 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE id=$1 AND deleted_at IS NULL
-	`, id).Scan(
-		&program.ID, &program.Name, &program.Description, &program.Type, &program.Variant,
-		&program.Difficulty, &program.RestBetweenSets,
-		&program.TargetReps, &program.TimeLimit, &program.Duration, &program.AllowRest,
-		&program.Sets, &program.RepsPerSet, &repsSequenceJSON, &program.RepsPerMinute,
-		&program.TotalMinutes, &program.IsCustom, &program.IsFeatured, &program.UsageCount,
-		&program.CreatedBy, &program.UpdatedBy, &program.DeletedBy,
-		&program.CreatedAt, &program.UpdatedAt, &program.DeletedAt,
-	)
+	`, id)
 
+	program, err := scanner.ScanWorkoutProgramWithJSON(row, json.Unmarshal)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "program not found", err)
 		return
-	}
-
-	// Décoder reps_sequence
-	if repsSequenceJSON != nil {
-		json.Unmarshal(repsSequenceJSON, &program.RepsSequence)
 	}
 
 	utils.Success(w, program)

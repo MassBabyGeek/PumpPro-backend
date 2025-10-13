@@ -10,6 +10,7 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 )
@@ -150,16 +151,12 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	var sessions []model.WorkoutSession
 	for rows.Next() {
-		var s model.WorkoutSession
-		if err := rows.Scan(
-			&s.ID, &s.ProgramID, &s.UserID, &s.StartTime, &s.EndTime,
-			&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
-			&s.CreatedAt, &s.UpdatedAt,
-		); err != nil {
+		session, err := scanner.ScanWorkoutSession(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
 		}
-		sessions = append(sessions, s)
+		sessions = append(sessions, *session)
 	}
 
 	// Charger les sets pour chaque session
@@ -178,15 +175,13 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 		var sets []model.SetResult
 		for setRows.Next() {
-			var s model.SetResult
-			if err := setRows.Scan(
-				&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
-			); err != nil {
+			set, err := scanner.ScanSetResult(setRows)
+			if err != nil {
 				setRows.Close()
 				utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
 				return
 			}
-			sets = append(sets, s)
+			sets = append(sets, *set)
 		}
 		setRows.Close()
 		sessions[i].Sets = sets
@@ -597,14 +592,12 @@ func GetSetResults(w http.ResponseWriter, r *http.Request) {
 
 	var results []model.SetResult
 	for rows.Next() {
-		var r model.SetResult
-		if err := rows.Scan(
-			&r.ID, &r.SessionID, &r.SetNumber, &r.TargetReps, &r.CompletedReps, &r.Duration, &r.Timestamp,
-		); err != nil {
+		result, err := scanner.ScanSetResult(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
 			return
 		}
-		results = append(results, r)
+		results = append(results, *result)
 	}
 
 	utils.Success(w, results)

@@ -2,17 +2,47 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 )
+
+// loadChallengeTasks charge les tasks d'un challenge
+func loadChallengeTasks(ctx context.Context, challengeID string) ([]model.ChallengeTask, error) {
+	rows, err := database.DB.Query(ctx, `
+		SELECT
+			id, challenge_id, day, title, description, type, variant,
+			target_reps, duration, sets, reps_per_set, completed, completed_at,
+			score, scheduled_date, is_locked, created_by, updated_by, deleted_by,
+			created_at, updated_at, deleted_at
+		FROM challenge_tasks
+		WHERE challenge_id = $1 AND deleted_at IS NULL
+		ORDER BY day ASC
+	`, challengeID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []model.ChallengeTask
+	for rows.Next() {
+		task, err := scanner.ScanChallengeTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, *task)
+	}
+
+	return tasks, nil
+}
 
 // GetChallenges récupère tous les challenges avec filtres optionnels
 func GetChallenges(w http.ResponseWriter, r *http.Request) {
@@ -86,29 +116,21 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 
 	var challenges []model.Challenge
 	for rows.Next() {
-		var c model.Challenge
-		var updatedBy sql.NullString
-		var startDate, endDate sql.NullTime
-		var tagsNull sql.NullString
-
-		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
-			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
-			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
-			&c.Badge, &startDate, &endDate, &c.Status, &tagsNull, &c.IsOfficial,
-			&c.CreatedBy, &updatedBy, &c.CreatedAt, &c.UpdatedAt,
-		); err != nil {
+		challenge, err := scanner.ScanChallenge(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
 
-		// Conversion utilitaire
-		c.Tags = utils.NullStringToStringArray(tagsNull)
-		c.UpdatedBy = utils.NullStringToPointer(updatedBy)
-		c.StartDate = utils.NullTimeToPointer(startDate)
-		c.EndDate = utils.NullTimeToPointer(endDate)
+		// Charger les tasks du challenge
+		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+			return
+		}
+		challenge.Tasks = tasks
 
-		challenges = append(challenges, c)
+		challenges = append(challenges, *challenge)
 	}
 
 	utils.Success(w, challenges)
@@ -120,12 +142,8 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	ctx := context.Background()
-	var challenge model.Challenge
-	var updatedBy sql.NullString
-	var tagsNull sql.NullString
-	var updatedAt sql.NullTime
 
-	err := database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 	SELECT
 		id, title, description, category, type, variant, difficulty,
 		target_reps, duration, sets, reps_per_set, image_url,
@@ -134,26 +152,22 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 		created_by, updated_by, created_at, updated_at
 	FROM challenges
 	WHERE id=$1 AND deleted_at IS NULL
-`, id).Scan(
-		&challenge.ID, &challenge.Title, &challenge.Description, &challenge.Category,
-		&challenge.Type, &challenge.Variant, &challenge.Difficulty,
-		&challenge.TargetReps, &challenge.Duration, &challenge.Sets, &challenge.RepsPerSet, &challenge.ImageURL,
-		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions,
-		&challenge.Likes, &challenge.Points, &challenge.Badge, &challenge.StartDate, &challenge.EndDate,
-		&challenge.Status, &tagsNull, &challenge.IsOfficial,
-		&challenge.CreatedBy, &updatedBy, &challenge.CreatedAt, &updatedAt,
-	)
+`, id)
 
-	challenge.Tags = utils.NullStringToStringArray(tagsNull)
-	challenge.UpdatedBy = utils.NullStringToPointer(updatedBy)
-	challenge.UpdatedAt = *utils.NullTimeToPointer(updatedAt)
-
+	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "challenge not found", err)
 		return
 	}
 
-	challenge.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	// Charger les tasks du challenge
+	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+		return
+	}
+	challenge.Tasks = tasks
+
 	utils.Success(w, challenge)
 }
 
@@ -319,8 +333,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retourner le challenge mis à jour
-	var challenge model.Challenge
-	err = database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
@@ -329,21 +342,21 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
-	`, challengeID).Scan(
-		&challenge.ID, &challenge.Title, &challenge.Description, &challenge.Category,
-		&challenge.Type, &challenge.Variant, &challenge.Difficulty,
-		&challenge.TargetReps, &challenge.Duration, &challenge.Sets, &challenge.RepsPerSet, &challenge.ImageURL,
-		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions,
-		&challenge.Likes, &challenge.Points, &challenge.Badge, &challenge.StartDate, &challenge.EndDate,
-		&challenge.Status, pq.Array(&challenge.Tags), &challenge.IsOfficial,
-		&challenge.CreatedBy, &challenge.UpdatedBy, &challenge.DeletedBy,
-		&challenge.CreatedAt, &challenge.UpdatedAt, &challenge.DeletedAt,
-	)
+	`, challengeID)
 
+	challenge, err := scanner.ScanChallengeWithPqArray(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
 	}
+
+	// Charger les tasks du challenge
+	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+		return
+	}
+	challenge.Tasks = tasks
 
 	utils.Success(w, challenge)
 }
@@ -384,8 +397,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retourner le challenge mis à jour
-	var challenge model.Challenge
-	err = database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT
 			id, title, description, category, type, variant, difficulty,
 			target_reps, duration, sets, reps_per_set, image_url,
@@ -394,21 +406,21 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM challenges
 		WHERE id=$1
-	`, challengeID).Scan(
-		&challenge.ID, &challenge.Title, &challenge.Description, &challenge.Category,
-		&challenge.Type, &challenge.Variant, &challenge.Difficulty,
-		&challenge.TargetReps, &challenge.Duration, &challenge.Sets, &challenge.RepsPerSet, &challenge.ImageURL,
-		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions,
-		&challenge.Likes, &challenge.Points, &challenge.Badge, &challenge.StartDate, &challenge.EndDate,
-		&challenge.Status, pq.Array(&challenge.Tags), &challenge.IsOfficial,
-		&challenge.CreatedBy, &challenge.UpdatedBy, &challenge.DeletedBy,
-		&challenge.CreatedAt, &challenge.UpdatedAt, &challenge.DeletedAt,
-	)
+	`, challengeID)
 
+	challenge, err := scanner.ScanChallengeWithPqArray(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
 	}
+
+	// Charger les tasks du challenge
+	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+		return
+	}
+	challenge.Tasks = tasks
 
 	utils.Success(w, challenge)
 }
@@ -458,17 +470,13 @@ func StartChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Créer la progression
-	var progress model.UserChallengeProgress
-	err = database.DB.QueryRow(ctx, `
-		INSERT INTO user_challenge_progress(challenge_id, user_id, progress, current_reps, target_reps, attempts, created_at, updated_at)
-		VALUES($1, $2, 0, 0, $3, 0, NOW(), NOW())
-		RETURNING id, challenge_id, user_id, progress, current_reps, target_reps, attempts, created_at, updated_at
-	`, challengeID, payload.UserID, targetReps).Scan(
-		&progress.ID, &progress.ChallengeID, &progress.UserID, &progress.Progress,
-		&progress.CurrentReps, &progress.TargetReps, &progress.Attempts,
-		&progress.CreatedAt, &progress.UpdatedAt,
-	)
+	row := database.DB.QueryRow(ctx, `
+		INSERT INTO user_challenge_progress(challenge_id, user_id, progress, current_reps, target_reps, attempts, completed_at, created_at, updated_at)
+		VALUES($1, $2, 0, 0, $3, 0, NULL, NOW(), NOW())
+		RETURNING id, challenge_id, user_id, progress, current_reps, target_reps, attempts, completed_at, created_at, updated_at
+	`, challengeID, payload.UserID, targetReps)
 
+	progress, err := scanner.ScanUserChallengeProgress(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
 		return
@@ -504,18 +512,14 @@ func CompleteChallenge(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	// Mettre à jour la progression
-	var progress model.UserChallengeProgress
-	err := database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		UPDATE user_challenge_progress
 		SET progress=100, completed_at=NOW(), updated_at=NOW()
 		WHERE challenge_id=$1 AND user_id=$2
 		RETURNING id, challenge_id, user_id, progress, current_reps, target_reps, attempts, completed_at, created_at, updated_at
-	`, challengeID, payload.UserID).Scan(
-		&progress.ID, &progress.ChallengeID, &progress.UserID, &progress.Progress,
-		&progress.CurrentReps, &progress.TargetReps, &progress.Attempts, &progress.CompletedAt,
-		&progress.CreatedAt, &progress.UpdatedAt,
-	)
+	`, challengeID, payload.UserID)
 
+	progress, err := scanner.ScanUserChallengeProgress(row)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "progress not found", err)
 		return
@@ -543,17 +547,13 @@ func GetUserChallengeProgress(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	var progress model.UserChallengeProgress
-	err := database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT id, challenge_id, user_id, progress, current_reps, target_reps, attempts, completed_at, created_at, updated_at
 		FROM user_challenge_progress
 		WHERE challenge_id=$1 AND user_id=$2
-	`, challengeID, userID).Scan(
-		&progress.ID, &progress.ChallengeID, &progress.UserID, &progress.Progress,
-		&progress.CurrentReps, &progress.TargetReps, &progress.Attempts, &progress.CompletedAt,
-		&progress.CreatedAt, &progress.UpdatedAt,
-	)
+	`, challengeID, userID)
 
+	progress, err := scanner.ScanUserChallengeProgress(row)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "progress not found", err)
 		return
@@ -590,18 +590,21 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 
 	var challenges []model.Challenge
 	for rows.Next() {
-		var c model.Challenge
-		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
-			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
-			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
-			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
-			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
-		); err != nil {
+		challenge, err := scanner.ScanChallengeWithPqArray(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
-		challenges = append(challenges, c)
+
+		// Charger les tasks du challenge
+		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+			return
+		}
+		challenge.Tasks = tasks
+
+		challenges = append(challenges, *challenge)
 	}
 
 	utils.Success(w, challenges)
@@ -635,18 +638,21 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 
 	var challenges []model.Challenge
 	for rows.Next() {
-		var c model.Challenge
-		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
-			&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
-			&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
-			&c.Badge, &c.StartDate, &c.EndDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
-			&c.CreatedBy, &c.UpdatedBy, &c.DeletedBy, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
-		); err != nil {
+		challenge, err := scanner.ScanChallengeWithPqArray(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
 		}
-		challenges = append(challenges, c)
+
+		// Charger les tasks du challenge
+		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
+			return
+		}
+		challenge.Tasks = tasks
+
+		challenges = append(challenges, *challenge)
 	}
 
 	utils.Success(w, challenges)

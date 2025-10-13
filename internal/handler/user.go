@@ -9,6 +9,7 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 
@@ -111,30 +112,12 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	var users []model.UserProfile
 	for rows.Next() {
-		var u model.UserProfile
-		var avatar, goal sql.NullString
-		var age sql.NullInt64
-		var weight, height sql.NullFloat64
-		var updatedBy sql.NullString
-
-		if err := rows.Scan(
-			&u.ID, &u.Name, &u.Email, &avatar,
-			&age, &weight, &height, &goal,
-			&u.JoinDate, &u.CreatedAt, &u.UpdatedAt,
-			&u.CreatedBy, &updatedBy,
-		); err != nil {
+		user, err := scanner.ScanUserProfile(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan user row", err)
 			return
 		}
-
-		u.Avatar = utils.NullStringToString(avatar)
-		u.Goal = utils.NullStringToString(goal)
-		u.Age = utils.NullInt64ToInt(age)
-		u.Weight = utils.NullFloat64ToFloat64(weight)
-		u.Height = utils.NullFloat64ToFloat64(height)
-		u.UpdatedBy = utils.NullStringToPointer(updatedBy)
-
-		users = append(users, u)
+		users = append(users, *user)
 	}
 
 	utils.Success(w, users)
@@ -145,35 +128,20 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	ctx := context.Background()
-	var user model.UserProfile
-	var avatar, goal sql.NullString
-	var age sql.NullInt64
-	var weight, height sql.NullFloat64
-	var updatedBy sql.NullString
 
-	err := database.DB.QueryRow(ctx,
+	row := database.DB.QueryRow(ctx,
 		`SELECT id, name, email, avatar, age, weight, height, goal,
 			 join_date, created_at, updated_at,
 			 created_by, updated_by
 		 FROM users WHERE id=$1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&user.ID, &user.Name, &user.Email, &avatar,
-		&age, &weight, &height, &goal,
-		&user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
-		&user.CreatedBy, &updatedBy,
 	)
 
+	user, err := scanner.ScanUserProfile(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not get user", err)
 		return
 	}
-
-	user.Avatar = utils.NullStringToString(avatar)
-	user.Goal = utils.NullStringToString(goal)
-	user.Age = utils.NullInt64ToInt(age)
-	user.Weight = utils.NullFloat64ToFloat64(weight)
-	user.Height = utils.NullFloat64ToFloat64(height)
-	user.UpdatedBy = utils.NullStringToPointer(updatedBy)
 
 	utils.Success(w, user)
 }
@@ -266,12 +234,9 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var stats model.Stats
 	ctx := context.Background()
-	var totalWorkouts, totalPushUps, totalTime, bestSession sql.NullInt64
-	var totalCalories, averagePushUps sql.NullFloat64
 
-	err := database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT
 			COUNT(*) as totalWorkouts,
 			COALESCE(SUM(total_reps), 0) as totalPushUps,
@@ -281,26 +246,13 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 			COALESCE(AVG(total_reps), 0) as averagePushUps
 		FROM workout_sessions
 		WHERE user_id = $1 AND start_time >= $2 AND start_time <= $3
-	`, userId, startDate, endDate).Scan(
-		&totalWorkouts,
-		&totalPushUps,
-		&totalTime,
-		&bestSession,
-		&totalCalories,
-		&averagePushUps,
-	)
+	`, userId, startDate, endDate)
 
+	stats, err := scanner.ScanStats(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch stats", err)
 		return
 	}
-
-	stats.TotalWorkouts = utils.NullInt64ToInt(totalWorkouts)
-	stats.TotalPushUps = utils.NullInt64ToInt(totalPushUps)
-	stats.TotalTime = utils.NullInt64ToInt(totalTime)
-	stats.BestSession = utils.NullInt64ToInt(bestSession)
-	stats.TotalCalories = utils.NullFloat64ToFloat64(totalCalories)
-	stats.AveragePushUps = utils.NullFloat64ToFloat64(averagePushUps)
 
 	// Calculs dérivés
 	if stats.TotalWorkouts > 0 {
@@ -441,29 +393,17 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Récupérer le profil mis à jour
-	var avatar, goal sql.NullString
-	var age sql.NullInt64
-	var weight, height sql.NullFloat64
-
-	err = database.DB.QueryRow(ctx, `
+	row := database.DB.QueryRow(ctx, `
 		SELECT id, name, email, avatar, age, weight, height, goal,
-		       join_date, created_at, updated_at
+		       join_date, created_at, updated_at, created_by, updated_by
 		FROM users WHERE id=$1 AND deleted_at IS NULL
-	`, user.ID).Scan(
-		&user.ID, &user.Name, &user.Email, &avatar, &age, &weight, &height,
-		&goal, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
-	)
+	`, user.ID)
 
+	updatedUser, err := scanner.ScanUserProfile(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch updated user", err)
 		return
 	}
 
-	user.Avatar = utils.NullStringToString(avatar)
-	user.Goal = utils.NullStringToString(goal)
-	user.Age = utils.NullInt64ToInt(age)
-	user.Weight = utils.NullFloat64ToFloat64(weight)
-	user.Height = utils.NullFloat64ToFloat64(height)
-
-	utils.Success(w, user)
+	utils.Success(w, updatedUser)
 }
