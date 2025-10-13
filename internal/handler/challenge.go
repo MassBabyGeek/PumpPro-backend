@@ -122,25 +122,31 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	var challenge model.Challenge
 	var updatedBy sql.NullString
+	var tagsNull sql.NullString
+	var updatedAt sql.NullTime
 
 	err := database.DB.QueryRow(ctx, `
-		SELECT
-			id, title, description, category, type, variant, difficulty,
-			target_reps, duration, sets, reps_per_set, image_url,
-			icon_name, icon_color, participants, completions, likes, points,
-			badge, start_date, end_date, status, tags, is_official,
-			created_by, updated_by, created_at, updated_at
-		FROM challenges
-		WHERE id=$1 AND deleted_at IS NULL
-	`, id).Scan(
+	SELECT
+		id, title, description, category, type, variant, difficulty,
+		target_reps, duration, sets, reps_per_set, image_url,
+		icon_name, icon_color, participants, completions, likes, points,
+		badge, start_date, end_date, status, tags, is_official,
+		created_by, updated_by, created_at, updated_at
+	FROM challenges
+	WHERE id=$1 AND deleted_at IS NULL
+`, id).Scan(
 		&challenge.ID, &challenge.Title, &challenge.Description, &challenge.Category,
 		&challenge.Type, &challenge.Variant, &challenge.Difficulty,
 		&challenge.TargetReps, &challenge.Duration, &challenge.Sets, &challenge.RepsPerSet, &challenge.ImageURL,
 		&challenge.IconName, &challenge.IconColor, &challenge.Participants, &challenge.Completions,
 		&challenge.Likes, &challenge.Points, &challenge.Badge, &challenge.StartDate, &challenge.EndDate,
-		&challenge.Status, pq.Array(&challenge.Tags), &challenge.IsOfficial,
-		&challenge.CreatedBy, &updatedBy, &challenge.CreatedAt, &challenge.UpdatedAt,
+		&challenge.Status, &tagsNull, &challenge.IsOfficial,
+		&challenge.CreatedBy, &updatedBy, &challenge.CreatedAt, &updatedAt,
 	)
+
+	challenge.Tags = utils.NullStringToStringArray(tagsNull)
+	challenge.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	challenge.UpdatedAt = *utils.NullTimeToPointer(updatedAt)
 
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "challenge not found", err)
