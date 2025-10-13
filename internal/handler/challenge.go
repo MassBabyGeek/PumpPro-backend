@@ -13,6 +13,7 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 )
 
@@ -214,36 +215,79 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 // GetChallengeById récupère un challenge par son ID
 func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
+	challengeID := vars["id"]
 
-	// Récupérer le userID optionnel depuis les query params
-	query := r.URL.Query()
-	userIDParam := query.Get("userId")
-	var userID *string
-	if userIDParam != "" {
-		userID = &userIDParam
-	}
-
+	// Récupérer l'utilisateur courant depuis le contexte (si authentifié)
+	user, _ := middleware.GetUserFromContext(r)
 	ctx := context.Background()
 
-	row := database.DB.QueryRow(ctx, `
-	SELECT
-		id, title, description, category, type, variant, difficulty,
-		target_reps, duration, sets, reps_per_set, image_url,
-		icon_name, icon_color, participants, completions, likes, points,
-		badge, start_date, end_date, status, tags, is_official,
-		created_by, updated_by, created_at, updated_at
-	FROM challenges
-	WHERE id=$1 AND deleted_at IS NULL
-`, id)
+	var row pgx.Row
+	if user.ID != "" {
+		// Utilisateur connecté : vérifier les valeurs user_completed / user_participated
+		row = database.DB.QueryRow(ctx, `
+			SELECT
+				c.id, c.title, c.description, c.category,
+				c.type, c.variant, c.difficulty, c.target_reps, c.duration,
+				c.sets, c.reps_per_set, c.image_url, c.icon_name, c.icon_color,
+				c.participants, c.completions, c.likes, c.points, c.badge,
+				c.start_date, c.end_date, c.status, c.tags, c.is_official,
+				c.created_by, c.updated_by, c.created_at, c.updated_at,
+				c.deleted_by, c.deleted_at,
 
+				COALESCE((
+					SELECT TRUE
+					FROM user_challenge_task_progress uctp
+					WHERE uctp.challenge_id = c.id
+					  AND uctp.user_id = $2
+					  AND uctp.completed = TRUE
+					LIMIT 1
+				), FALSE) AS user_completed,
+
+				FALSE AS user_liked,
+
+				COALESCE((
+					SELECT TRUE
+					FROM user_challenge_task_progress uctp
+					WHERE uctp.challenge_id = c.id
+					  AND uctp.user_id = $2
+					LIMIT 1
+				), FALSE) AS user_participated
+			FROM challenges c
+			WHERE c.id = $1
+			  AND c.deleted_at IS NULL
+		`, challengeID, user.ID)
+	} else {
+		// Utilisateur non connecté : valeurs par défaut FALSE
+		row = database.DB.QueryRow(ctx, `
+			SELECT
+				c.id, c.title, c.description, c.category,
+				c.type, c.variant, c.difficulty, c.target_reps, c.duration,
+				c.sets, c.reps_per_set, c.image_url, c.icon_name, c.icon_color,
+				c.participants, c.completions, c.likes, c.points, c.badge,
+				c.start_date, c.end_date, c.status, c.tags, c.is_official,
+				c.created_by, c.updated_by, c.created_at, c.updated_at,
+				c.deleted_by, c.deleted_at,
+				FALSE AS user_completed,
+				FALSE AS user_liked,
+				FALSE AS user_participated
+			FROM challenges c
+			WHERE c.id = $1
+			  AND c.deleted_at IS NULL
+		`, challengeID)
+	}
+
+	// Scanner le challenge
 	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "challenge not found", err)
 		return
 	}
 
-	// Charger les tasks du challenge avec la progression utilisateur
+	// Charger les tasks du challenge avec progression utilisateur si connecté
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
 	tasks, err := loadChallengeTasks(ctx, challenge.ID, userID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)

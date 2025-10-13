@@ -43,16 +43,18 @@ func ScanChallenge(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.Challenge, error) {
 	var c model.Challenge
-	var updatedBy sql.NullString
-	var startDate, endDate sql.NullTime
+	var updatedBy, createdBy, deletedBy sql.NullString
+	var startDate, endDate, createdAt, updatedAt, deletedAt sql.NullTime
 	var tagsNull sql.NullString
+	var userCompleted, userLiked, userParticipated sql.NullBool
 
 	err := scanner.Scan(
 		&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
 		&c.TargetReps, &c.Duration, &c.Sets, &c.RepsPerSet, &c.ImageURL,
 		&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
 		&c.Badge, &startDate, &endDate, &c.Status, &tagsNull, &c.IsOfficial,
-		&c.CreatedBy, &updatedBy, &c.CreatedAt, &c.UpdatedAt,
+		&createdBy, &updatedBy, &createdAt, &updatedAt, &deletedBy, &deletedAt,
+		&userCompleted, &userLiked, &userParticipated,
 	)
 	if err != nil {
 		return nil, err
@@ -62,6 +64,12 @@ func ScanChallenge(scanner interface {
 	c.UpdatedBy = utils.NullStringToPointer(updatedBy)
 	c.StartDate = utils.NullTimeToPointer(startDate)
 	c.EndDate = utils.NullTimeToPointer(endDate)
+	c.CreatedBy = utils.NullStringToPointer(createdBy)
+	c.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	c.DeletedBy = utils.NullStringToPointer(deletedBy)
+	c.UserCompleted = utils.NullBoolToBool(userCompleted)
+	c.UserLiked = utils.NullBoolToBool(userLiked)
+	c.UserParticipated = utils.NullBoolToBool(userParticipated)
 
 	return &c, nil
 }
