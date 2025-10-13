@@ -10,7 +10,9 @@ import (
 
 // ScanUserProfile scanne une ligne SQL vers un UserProfile
 // Utilise les types sql.Null* et les convertit automatiquement
-func ScanUserProfile(scanner interface{ Scan(dest ...interface{}) error }) (*model.UserProfile, error) {
+func ScanUserProfile(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.UserProfile, error) {
 	var user model.UserProfile
 	var avatar, goal sql.NullString
 	var age sql.NullInt64
@@ -39,7 +41,9 @@ func ScanUserProfile(scanner interface{ Scan(dest ...interface{}) error }) (*mod
 }
 
 // ScanChallenge scanne une ligne SQL vers un Challenge
-func ScanChallenge(scanner interface{ Scan(dest ...interface{}) error }) (*model.Challenge, error) {
+func ScanChallenge(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Challenge, error) {
 	var c model.Challenge
 	var updatedBy sql.NullString
 	var startDate, endDate sql.NullTime
@@ -66,7 +70,9 @@ func ScanChallenge(scanner interface{ Scan(dest ...interface{}) error }) (*model
 }
 
 // ScanChallengeWithPqArray scanne une ligne SQL vers un Challenge avec pq.Array pour les tags
-func ScanChallengeWithPqArray(scanner interface{ Scan(dest ...interface{}) error }) (*model.Challenge, error) {
+func ScanChallengeWithPqArray(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Challenge, error) {
 	var c model.Challenge
 
 	err := scanner.Scan(
@@ -84,7 +90,9 @@ func ScanChallengeWithPqArray(scanner interface{ Scan(dest ...interface{}) error
 }
 
 // ScanWorkoutSession scanne une ligne SQL vers un WorkoutSession
-func ScanWorkoutSession(scanner interface{ Scan(dest ...interface{}) error }) (*model.WorkoutSession, error) {
+func ScanWorkoutSession(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.WorkoutSession, error) {
 	var s model.WorkoutSession
 
 	err := scanner.Scan(
@@ -100,7 +108,9 @@ func ScanWorkoutSession(scanner interface{ Scan(dest ...interface{}) error }) (*
 }
 
 // ScanSetResult scanne une ligne SQL vers un SetResult
-func ScanSetResult(scanner interface{ Scan(dest ...interface{}) error }) (*model.SetResult, error) {
+func ScanSetResult(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.SetResult, error) {
 	var s model.SetResult
 
 	err := scanner.Scan(
@@ -116,7 +126,9 @@ func ScanSetResult(scanner interface{ Scan(dest ...interface{}) error }) (*model
 
 // ScanWorkoutProgramWithJSON scanne une ligne SQL vers un WorkoutProgram
 // Utilise []byte pour reps_sequence qui sera décodé en JSON
-func ScanWorkoutProgramWithJSON(scanner interface{ Scan(dest ...interface{}) error }, unmarshalJSON func([]byte, interface{}) error) (*model.WorkoutProgram, error) {
+func ScanWorkoutProgramWithJSON(scanner interface {
+	Scan(dest ...interface{}) error
+}, unmarshalJSON func([]byte, interface{}) error) (*model.WorkoutProgram, error) {
 	var p model.WorkoutProgram
 	var repsSequenceJSON []byte
 
@@ -140,7 +152,9 @@ func ScanWorkoutProgramWithJSON(scanner interface{ Scan(dest ...interface{}) err
 }
 
 // ScanWorkoutProgram scanne une ligne SQL vers un WorkoutProgram avec pq.Array
-func ScanWorkoutProgram(scanner interface{ Scan(dest ...interface{}) error }) (*model.WorkoutProgram, error) {
+func ScanWorkoutProgram(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.WorkoutProgram, error) {
 	var p model.WorkoutProgram
 	var repsSequence pq.Int64Array
 
@@ -169,7 +183,9 @@ func ScanWorkoutProgram(scanner interface{ Scan(dest ...interface{}) error }) (*
 
 // ScanStats scanne une ligne SQL vers un Stats
 // Utilise directement les types sql.Null* et les convertit
-func ScanStats(scanner interface{ Scan(dest ...interface{}) error }) (*model.Stats, error) {
+func ScanStats(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Stats, error) {
 	var stats model.Stats
 	var totalWorkouts, totalPushUps, totalTime, bestSession sql.NullInt64
 	var totalCalories, averagePushUps sql.NullFloat64
@@ -197,7 +213,9 @@ func ScanStats(scanner interface{ Scan(dest ...interface{}) error }) (*model.Sta
 }
 
 // ScanUserChallengeProgress scanne une ligne SQL vers un UserChallengeProgress
-func ScanUserChallengeProgress(scanner interface{ Scan(dest ...interface{}) error }) (*model.UserChallengeProgress, error) {
+func ScanUserChallengeProgress(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.UserChallengeProgress, error) {
 	var progress model.UserChallengeProgress
 
 	err := scanner.Scan(
@@ -213,25 +231,40 @@ func ScanUserChallengeProgress(scanner interface{ Scan(dest ...interface{}) erro
 }
 
 // ScanChallengeTask scanne une ligne SQL vers un ChallengeTask
-func ScanChallengeTask(scanner interface{ Scan(dest ...interface{}) error }) (*model.ChallengeTask, error) {
+func ScanChallengeTask(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ChallengeTask, error) {
 	var task model.ChallengeTask
+	var createdBy, deletedBy, updatedBy sql.NullString
+	var createdAt, deletedAt, updatedAt sql.NullTime
 
 	err := scanner.Scan(
 		&task.ID, &task.ChallengeID, &task.Day, &task.Title, &task.Description,
 		&task.Type, &task.Variant, &task.TargetReps, &task.Duration, &task.Sets, &task.RepsPerSet,
 		&task.ScheduledDate, &task.IsLocked,
-		&task.CreatedBy, &task.UpdatedBy, &task.DeletedBy,
-		&task.CreatedAt, &task.UpdatedAt, &task.DeletedAt,
+		&createdBy, &updatedBy, &deletedBy,
+		&createdAt, &updatedAt, &deletedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	task.DateFields = model.DateFields{
+		CreatedBy: utils.NullStringToPointer(createdBy),
+		UpdatedBy: utils.NullStringToPointer(updatedBy),
+		DeletedBy: utils.NullStringToPointer(deletedBy),
+		CreatedAt: *utils.NullTimeToPointer(createdAt),
+		UpdatedAt: *utils.NullTimeToPointer(updatedAt),
+		DeletedAt: *utils.NullTimeToPointer(deletedAt),
 	}
 
 	return &task, nil
 }
 
 // ScanUserChallengeTaskProgress scanne une ligne SQL vers un UserChallengeTaskProgress
-func ScanUserChallengeTaskProgress(scanner interface{ Scan(dest ...interface{}) error }) (*model.UserChallengeTaskProgress, error) {
+func ScanUserChallengeTaskProgress(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.UserChallengeTaskProgress, error) {
 	var progress model.UserChallengeTaskProgress
 
 	err := scanner.Scan(

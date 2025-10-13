@@ -63,8 +63,7 @@ type UserChallengeProgress struct {
 	TargetReps  int        `json:"targetReps"`
 	Attempts    int        `json:"attempts"`
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
+	DateFields
 }
 
 type ChallengeLike struct {
