@@ -5,7 +5,7 @@ import (
 )
 
 // AuditFields contient les champs d'audit standard pour toutes les entités
-type AuditFields struct {
+type DateFields struct {
 	CreatedBy *string   `json:"createdBy,omitempty"`
 	UpdatedBy *string   `json:"updatedBy,omitempty"`
 	DeletedAt time.Time `json:"deletedAt,omitempty"`
@@ -25,5 +25,5 @@ type UserProfile struct {
 	Goal     string    `json:"goal,omitempty"`
 	Provider string    `json:"provider,omitempty"` // email, google, apple
 	JoinDate time.Time `json:"joinDate,omitempty"`
-	AuditFields
+	DateFields
 }

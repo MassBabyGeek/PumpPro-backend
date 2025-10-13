@@ -14,13 +14,13 @@ import (
 	"github.com/lib/pq"
 )
 
-// loadChallengeTasks charge les tasks d'un challenge
-func loadChallengeTasks(ctx context.Context, challengeID string) ([]model.ChallengeTask, error) {
+// loadChallengeTasks charge les tasks d'un challenge avec la progression utilisateur optionnelle
+func loadChallengeTasks(ctx context.Context, challengeID string, userID *string) ([]model.ChallengeTask, error) {
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, challenge_id, day, title, description, type, variant,
-			target_reps, duration, sets, reps_per_set, completed, completed_at,
-			score, scheduled_date, is_locked, created_by, updated_by, deleted_by,
+			target_reps, duration, sets, reps_per_set,
+			scheduled_date, is_locked, created_by, updated_by, deleted_by,
 			created_at, updated_at, deleted_at
 		FROM challenge_tasks
 		WHERE challenge_id = $1 AND deleted_at IS NULL
@@ -38,6 +38,24 @@ func loadChallengeTasks(ctx context.Context, challengeID string) ([]model.Challe
 		if err != nil {
 			return nil, err
 		}
+
+		// Si un userID est fourni, charger la progression de l'utilisateur pour cette task
+		if userID != nil && *userID != "" {
+			progressRow := database.DB.QueryRow(ctx, `
+				SELECT
+					id, user_id, task_id, challenge_id, completed, completed_at,
+					score, attempts, created_at, updated_at
+				FROM user_challenge_task_progress
+				WHERE task_id = $1 AND user_id = $2
+			`, task.ID, *userID)
+
+			progress, err := scanner.ScanUserChallengeTaskProgress(progressRow)
+			if err == nil {
+				task.UserProgress = progress
+			}
+			// Si pas de progression trouvée, on laisse UserProgress à nil
+		}
+
 		tasks = append(tasks, *task)
 	}
 
@@ -48,6 +66,13 @@ func loadChallengeTasks(ctx context.Context, challengeID string) ([]model.Challe
 func GetChallenges(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	query := r.URL.Query()
+
+	// Récupérer le userID optionnel depuis les query params
+	userIDParam := query.Get("userId")
+	var userID *string
+	if userIDParam != "" {
+		userID = &userIDParam
+	}
 
 	filters := map[string]string{
 		"category":   query.Get("category"),
@@ -122,8 +147,8 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Charger les tasks du challenge
-		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		// Charger les tasks du challenge avec la progression utilisateur
+		tasks, err := loadChallengeTasks(ctx, challenge.ID, userID)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 			return
@@ -140,6 +165,14 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
+
+	// Récupérer le userID optionnel depuis les query params
+	query := r.URL.Query()
+	userIDParam := query.Get("userId")
+	var userID *string
+	if userIDParam != "" {
+		userID = &userIDParam
+	}
 
 	ctx := context.Background()
 
@@ -160,8 +193,8 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les tasks du challenge
-	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	// Charger les tasks du challenge avec la progression utilisateur
+	tasks, err := loadChallengeTasks(ctx, challenge.ID, userID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 		return
@@ -350,8 +383,8 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les tasks du challenge
-	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	// Charger les tasks du challenge avec la progression utilisateur
+	tasks, err := loadChallengeTasks(ctx, challenge.ID, &payload.UserID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 		return
@@ -414,8 +447,8 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les tasks du challenge
-	tasks, err := loadChallengeTasks(ctx, challenge.ID)
+	// Charger les tasks du challenge avec la progression utilisateur
+	tasks, err := loadChallengeTasks(ctx, challenge.ID, &userID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 		return
@@ -596,8 +629,8 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Charger les tasks du challenge
-		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		// Charger les tasks du challenge avec la progression utilisateur
+		tasks, err := loadChallengeTasks(ctx, challenge.ID, &userID)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 			return
@@ -644,8 +677,8 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Charger les tasks du challenge
-		tasks, err := loadChallengeTasks(ctx, challenge.ID)
+		// Charger les tasks du challenge avec la progression utilisateur
+		tasks, err := loadChallengeTasks(ctx, challenge.ID, &userID)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 			return
@@ -656,4 +689,76 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Success(w, challenges)
+}
+
+
+// CompleteTask marque une task comme complétée
+func CompleteTask(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	challengeID := vars["challengeId"]
+	taskID := vars["taskId"]
+
+	var payload struct {
+		UserID string `json:"userId"`
+		Score  *int   `json:"score,omitempty"`
+	}
+	if err := utils.DecodeJSON(r, &payload); err != nil {
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	ctx := context.Background()
+
+	// Vérifier que la task existe et appartient au challenge
+	var exists bool
+	err := database.DB.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM challenge_tasks WHERE id=$1 AND challenge_id=$2 AND deleted_at IS NULL)`,
+		taskID, challengeID,
+	).Scan(&exists)
+
+	if err != nil || !exists {
+		utils.ErrorSimple(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	// Vérifier si un enregistrement de progression existe déjà
+	var progressID string
+	var attempts int
+	err = database.DB.QueryRow(ctx,
+		`SELECT id, attempts FROM user_challenge_task_progress WHERE task_id=$1 AND user_id=$2`,
+		taskID, payload.UserID,
+	).Scan(&progressID, &attempts)
+
+	var progress *model.UserChallengeTaskProgress
+
+	if err == nil {
+		// Update existing progress
+		row := database.DB.QueryRow(ctx, `
+			UPDATE user_challenge_task_progress
+			SET completed=true, completed_at=NOW(), score=$1, attempts=attempts+1, updated_at=NOW()
+			WHERE id=$2
+			RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
+		`, payload.Score, progressID)
+
+		progress, err = scanner.ScanUserChallengeTaskProgress(row)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not update progress", err)
+			return
+		}
+	} else {
+		// Create new progress
+		row := database.DB.QueryRow(ctx, `
+			INSERT INTO user_challenge_task_progress(user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at)
+			VALUES($1, $2, $3, true, NOW(), $4, 1, NOW(), NOW())
+			RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
+		`, payload.UserID, taskID, challengeID, payload.Score)
+
+		progress, err = scanner.ScanUserChallengeTaskProgress(row)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
+			return
+		}
+	}
+
+	utils.Success(w, progress)
 }

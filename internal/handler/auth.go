@@ -28,7 +28,7 @@ type Session struct {
 	IsActive  bool      `json:"isActive"`
 	IP        string    `json:"ipAddress"`
 	UserAgent string    `json:"userAgent"`
-	model.AuditFields
+	model.DateFields
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {

@@ -219,7 +219,7 @@ func ScanChallengeTask(scanner interface{ Scan(dest ...interface{}) error }) (*m
 	err := scanner.Scan(
 		&task.ID, &task.ChallengeID, &task.Day, &task.Title, &task.Description,
 		&task.Type, &task.Variant, &task.TargetReps, &task.Duration, &task.Sets, &task.RepsPerSet,
-		&task.Completed, &task.CompletedAt, &task.Score, &task.ScheduledDate, &task.IsLocked,
+		&task.ScheduledDate, &task.IsLocked,
 		&task.CreatedBy, &task.UpdatedBy, &task.DeletedBy,
 		&task.CreatedAt, &task.UpdatedAt, &task.DeletedAt,
 	)
@@ -228,4 +228,20 @@ func ScanChallengeTask(scanner interface{ Scan(dest ...interface{}) error }) (*m
 	}
 
 	return &task, nil
+}
+
+// ScanUserChallengeTaskProgress scanne une ligne SQL vers un UserChallengeTaskProgress
+func ScanUserChallengeTaskProgress(scanner interface{ Scan(dest ...interface{}) error }) (*model.UserChallengeTaskProgress, error) {
+	var progress model.UserChallengeTaskProgress
+
+	err := scanner.Scan(
+		&progress.ID, &progress.UserID, &progress.TaskID, &progress.ChallengeID,
+		&progress.Completed, &progress.CompletedAt, &progress.Score, &progress.Attempts,
+		&progress.CreatedAt, &progress.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &progress, nil
 }

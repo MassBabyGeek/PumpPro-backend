@@ -44,7 +44,7 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/challenges", handler.CreateChallenge).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.UpdateChallenge).Methods(http.MethodPut)
 	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.DeleteChallenge).Methods(http.MethodDelete)
-	// authenticatedRoutes.HandleFunc("/challenges/{id}/tasks/{id}", handler.CompleteChallengeTask).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/challenges/{id}/tasks/{id}", handler.CompleteTask).Methods(http.MethodPost)
 
 	// Challenge interactions
 	authenticatedRoutes.HandleFunc("/challenges/{id}/like", handler.LikeChallenge).Methods(http.MethodPost)

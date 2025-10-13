@@ -29,12 +29,7 @@ type WorkoutProgram struct {
 	IsFeatured bool `json:"isFeatured"`
 	UsageCount int  `json:"usageCount"` // Nombre de fois utilisé
 
-	CreatedBy *string    `json:"createdBy,omitempty"`
-	UpdatedBy *string    `json:"updatedBy,omitempty"`
-	DeletedBy *string    `json:"deletedBy,omitempty"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	DateFields
 }
 
 type WorkoutSession struct {
