@@ -17,7 +17,6 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes := r.PathPrefix("/").Subrouter()
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
 	authenticatedRoutes.Use(middleware.LoggerMiddleware)
-	
 
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)
@@ -45,6 +44,7 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/challenges", handler.CreateChallenge).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.UpdateChallenge).Methods(http.MethodPut)
 	authenticatedRoutes.HandleFunc("/challenges/{id}", handler.DeleteChallenge).Methods(http.MethodDelete)
+	// authenticatedRoutes.HandleFunc("/challenges/{id}/tasks/{id}", handler.CompleteChallengeTask).Methods(http.MethodPost)
 
 	// Challenge interactions
 	authenticatedRoutes.HandleFunc("/challenges/{id}/like", handler.LikeChallenge).Methods(http.MethodPost)
@@ -78,10 +78,10 @@ func SetupRouter() http.Handler {
 
 	// Workout Sessions
 	r.HandleFunc("/workouts", handler.GetWorkoutSessions).Methods(http.MethodGet)
-	r.HandleFunc("/workouts", handler.SaveWorkoutSession).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/workouts", handler.SaveWorkoutSession).Methods(http.MethodPost)
 	r.HandleFunc("/workouts/{id}", handler.GetWorkoutSession).Methods(http.MethodGet)
-	r.HandleFunc("/workouts/{id}", handler.UpdateWorkoutSession).Methods(http.MethodPatch)
-	r.HandleFunc("/workouts/{id}", handler.DeleteWorkoutSession).Methods(http.MethodDelete)
+	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.UpdateWorkoutSession).Methods(http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.DeleteWorkoutSession).Methods(http.MethodDelete)
 
 	// User workout sessions
 	r.HandleFunc("/users/{userId}/workouts", handler.GetWorkoutSessions).Methods(http.MethodGet)

@@ -47,6 +47,20 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if session.ChallengeID != nil && session.ChallengeTaskID != nil {
+		_, err := database.DB.Exec(ctx, `
+			INSERT INTO user_challenge_progress(
+				challenge_id, user_id, progress, current_reps, 
+				target_reps, attempts, completed_at, created_at, updated_at)
+			VALUES($1, $2, $3)
+		`, session.ID, *session.ChallengeID, *session.ChallengeTaskID)
+
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not save workout session", err)
+			return
+		}
+	}
+
 	// Sauvegarder les sets s'ils sont fournis
 	if len(session.Sets) > 0 {
 		for _, set := range session.Sets {

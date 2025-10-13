@@ -38,18 +38,20 @@ type WorkoutProgram struct {
 }
 
 type WorkoutSession struct {
-	ID            string      `json:"sessionId"`
-	ProgramID     string      `json:"programId"`
-	UserID        string      `json:"userId"`
-	StartTime     time.Time   `json:"startTime"`
-	EndTime       *time.Time  `json:"endTime,omitempty"`
-	TotalReps     int         `json:"totalReps"`
-	TotalDuration int         `json:"totalDuration"` // en secondes
-	Completed     bool        `json:"completed"`
-	Notes         *string     `json:"notes,omitempty"`
-	CreatedAt     time.Time   `json:"createdAt"`
-	UpdatedAt     time.Time   `json:"updatedAt"`
-	Sets          []SetResult `json:"sets"`
+	ID              string      `json:"sessionId"`
+	ProgramID       string      `json:"programId"`
+	UserID          string      `json:"userId"`
+	ChallengeID     *string     `json:"challengeId,omitempty"`
+	ChallengeTaskID *string     `json:"challengeTaskId,omitempty"`
+	StartTime       time.Time   `json:"startTime"`
+	EndTime         *time.Time  `json:"endTime,omitempty"`
+	TotalReps       int         `json:"totalReps"`
+	TotalDuration   int         `json:"totalDuration"` // en secondes
+	Completed       bool        `json:"completed"`
+	Notes           *string     `json:"notes,omitempty"`
+	CreatedAt       time.Time   `json:"createdAt"`
+	UpdatedAt       time.Time   `json:"updatedAt"`
+	Sets            []SetResult `json:"sets"`
 }
 
 type SetResult struct {
