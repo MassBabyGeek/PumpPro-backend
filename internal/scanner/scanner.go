@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"database/sql"
+	"fmt"
+	"time"
 
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
@@ -72,6 +74,38 @@ func ScanChallenge(scanner interface {
 	c.UserParticipated = utils.NullBoolToBool(userParticipated)
 
 	return &c, nil
+}
+
+func ScanChartData(scanner interface {
+	Scan(dest ...interface{}) error
+}) (model.ChartData, error) {
+
+	var data model.ChartData
+	var pushUps, duration sql.NullInt64
+	var calories sql.NullFloat64
+	var dateValue interface{}
+
+	// Lecture des colonnes SQL
+	if err := scanner.Scan(&dateValue, &pushUps, &duration, &calories); err != nil {
+		return data, fmt.Errorf("could not scan chart data: %w", err)
+	}
+
+	// Conversion du champ "date"
+	switch v := dateValue.(type) {
+	case time.Time:
+		data.Date = v.Format("2006-01-02")
+	case string:
+		data.Date = v
+	default:
+		data.Date = ""
+	}
+
+	// Conversion des valeurs nullables
+	data.PushUps = utils.NullInt64ToInt(pushUps)
+	data.Duration = utils.NullInt64ToInt(duration)
+	data.Calories = utils.NullFloat64ToFloat64(calories)
+
+	return data, nil
 }
 
 // ✅ ScanChallengeWithPqArray corrigée (NullTime-safe)

@@ -27,3 +27,10 @@ type UserProfile struct {
 	JoinDate time.Time `json:"joinDate,omitempty"`
 	DateFields
 }
+
+type ChartData struct {
+	Date     string  `json:"date"`
+	PushUps  int     `json:"pushUps"`
+	Duration int     `json:"duration"`
+	Calories float64 `json:"calories"`
+}

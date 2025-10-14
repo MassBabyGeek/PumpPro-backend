@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
@@ -264,79 +263,95 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, stats)
 }
 
-// GetChartData récupère les données pour les graphiques
+// GetChartData récupère les données des pompes par période : semaine, mois, année ou total
 func GetChartData(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["userId"]
-	period := vars["period"] // week, month, year
+	period := vars["period"] // "week", "month", "year", "total"
 
 	ctx := context.Background()
 
-	var days int
+	// Construction dynamique de la requête
+	var query string
+	var args []interface{}
+
 	switch period {
 	case "week":
-		days = 7
+		query = `
+			WITH date_range AS (
+				SELECT generate_series(
+					date_trunc('week', CURRENT_DATE),
+					CURRENT_DATE,
+					INTERVAL '1 day'
+				)::date AS date
+			)
+			SELECT
+				dr.date,
+				COALESCE(SUM(ws.total_reps), 0) AS total_reps,
+				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
+				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
+			FROM date_range dr
+			LEFT JOIN workout_sessions ws ON DATE(ws.start_time) = dr.date AND ws.user_id = $1
+			GROUP BY dr.date
+			ORDER BY dr.date;
+		`
+		args = append(args, userID)
+
 	case "month":
-		days = 30
+		query = `
+			SELECT
+				DATE_TRUNC('day', ws.start_time)::date AS date,
+				COALESCE(SUM(ws.total_reps), 0) AS total_reps,
+				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
+				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
+			FROM workout_sessions ws
+			WHERE ws.user_id = $1
+				AND ws.start_time >= date_trunc('month', CURRENT_DATE)
+			GROUP BY DATE_TRUNC('day', ws.start_time)
+			ORDER BY date;
+		`
+		args = append(args, userID)
+
 	case "year":
-		days = 365
+		query = `
+			SELECT
+				TO_CHAR(DATE_TRUNC('month', ws.start_time), 'YYYY-MM') AS date,
+				COALESCE(SUM(ws.total_reps), 0) AS total_reps,
+				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
+				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
+			FROM workout_sessions ws
+			WHERE ws.user_id = $1
+				AND ws.start_time >= date_trunc('year', CURRENT_DATE)
+			GROUP BY DATE_TRUNC('month', ws.start_time)
+			ORDER BY date;
+		`
+		args = append(args, userID)
+
 	default:
-		days = 7
+		utils.Error(w, http.StatusBadRequest, "invalid period (use week, month, year, total)", nil)
+		return
 	}
 
-	// Générer les dates pour la période
-	rows, err := database.DB.Query(ctx, `
-		WITH date_range AS (
-			SELECT generate_series(
-				CURRENT_DATE - INTERVAL '1 day' * $1,
-				CURRENT_DATE,
-				INTERVAL '1 day'
-			)::date as date
-		)
-		SELECT
-			dr.date,
-			COALESCE(SUM(ws.total_reps), 0) as total_reps,
-			COALESCE(SUM(ws.total_duration), 0) as total_duration,
-			COALESCE(SUM(ws.total_reps) * 0.29, 0) as calories
-		FROM date_range dr
-		LEFT JOIN workout_sessions ws ON DATE(ws.start_time) = dr.date AND ws.user_id = $2
-		GROUP BY dr.date
-		ORDER BY dr.date
-	`, days, userID)
-
+	// Exécution de la requête
+	rows, err := database.DB.Query(ctx, query, args...)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch chart data", err)
 		return
 	}
 	defer rows.Close()
 
-	type DayData struct {
-		Date     string  `json:"date"`
-		PushUps  int     `json:"pushUps"`
-		Duration int     `json:"duration"`
-		Calories float64 `json:"calories"`
-	}
+	var chartDatas []model.ChartData
 
-	var chartData []DayData
 	for rows.Next() {
-		var date string
-		var data DayData
-		var pushUps, duration sql.NullInt64
-		var calories sql.NullFloat64
-
-		if err := rows.Scan(&date, &pushUps, &duration, &calories); err != nil {
+		chartData, err := scanner.ScanChartData(rows)
+		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan chart data", err)
 			return
 		}
-
-		data.Date = date
-		data.PushUps = utils.NullInt64ToInt(pushUps)
-		data.Duration = utils.NullInt64ToInt(duration)
-		data.Calories = utils.NullFloat64ToFloat64(calories)
-		chartData = append(chartData, data)
+		chartDatas = append(chartDatas, chartData)
 	}
 
-	utils.Success(w, chartData)
+	utils.Success(w, chartDatas)
 }
 
 // UploadAvatar gère l'upload d'avatar utilisateur
