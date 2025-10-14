@@ -24,6 +24,7 @@ type UserProfile struct {
 	Height   float64   `json:"height,omitempty"`
 	Goal     string    `json:"goal,omitempty"`
 	Provider string    `json:"provider,omitempty"` // email, google, apple
+	Score    int       `json:"score"`
 	JoinDate time.Time `json:"joinDate,omitempty"`
 	DateFields
 }

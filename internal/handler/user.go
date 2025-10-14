@@ -30,8 +30,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
 	err := database.DB.QueryRow(ctx,
-		`INSERT INTO users(name,email,password_hash,avatar,age,weight,height,goal,join_date,created_at,updated_at,created_by)
-		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW(),NOW(),$9)
+		`INSERT INTO users(name,email,password_hash,avatar,age,weight,height,goal,score,join_date,created_at,updated_at,created_by)
+		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,NOW(),NOW(),NOW(),$9)
 		 RETURNING id, join_date, created_at, updated_at, created_by`,
 		user.Name, user.Email, string(hashed), user.Avatar, user.Age,
 		user.Weight, user.Height, user.Goal, user.CreatedBy,
@@ -98,7 +98,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	rows, err := database.DB.Query(ctx, `
 		SELECT
-			id, name, email, avatar, age, weight, height, goal,
+			id, name, email, avatar, age, weight, height, goal, score,
 			join_date, created_at, updated_at,
 			created_by, updated_by
 		FROM users
@@ -130,7 +130,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	row := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, avatar, age, weight, height, goal,
+		`SELECT id, name, email, avatar, age, weight, height, goal, score,
 			 join_date, created_at, updated_at,
 			 created_by, updated_by
 		 FROM users WHERE id=$1 AND deleted_at IS NULL`,
@@ -427,7 +427,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 	// Récupérer le profil mis à jour
 	row := database.DB.QueryRow(ctx, `
-		SELECT id, name, email, avatar, age, weight, height, goal,
+		SELECT id, name, email, avatar, age, weight, height, goal, score,
 		       join_date, created_at, updated_at, created_by, updated_by
 		FROM users WHERE id=$1 AND deleted_at IS NULL
 	`, user.ID)

@@ -727,6 +727,21 @@ func CompleteChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Récupérer les points du challenge et les ajouter au score de l'utilisateur
+	var challengePoints int
+	err = database.DB.QueryRow(ctx, `
+		SELECT points FROM challenges WHERE id = $1
+	`, challengeID).Scan(&challengePoints)
+
+	if err == nil && challengePoints > 0 {
+		// Incrémenter le score de l'utilisateur
+		if err := utils.IncrementUserScore(ctx, payload.UserID, challengePoints); err != nil {
+			// Log l'erreur mais ne pas bloquer la complétion du challenge
+			utils.Error(w, http.StatusInternalServerError, "could not update user score", err)
+			return
+		}
+	}
+
 	utils.Success(w, progress)
 }
 

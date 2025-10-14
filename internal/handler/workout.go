@@ -50,7 +50,7 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	// Si la session est liée à une tâche de challenge, mettre à jour la progression
 	if session.ChallengeID != nil && session.ChallengeTaskID != nil {
 		// Récupérer les infos de la tâche pour obtenir le score
-		var taskScore *int
+		var taskScore int
 		err := database.DB.QueryRow(ctx, `
 			SELECT score FROM challenge_tasks WHERE id = $1
 		`, *session.ChallengeTaskID).Scan(&taskScore)
@@ -60,6 +60,16 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 			utils.Error(w, http.StatusInternalServerError, "could not fetch task score", err)
 			return
 		}
+
+		// Vérifier si la task était déjà complétée pour ne pas donner les points plusieurs fois
+		var alreadyCompleted bool
+		err = database.DB.QueryRow(ctx, `
+			SELECT completed FROM user_challenge_task_progress
+			WHERE user_id = $1 AND task_id = $2
+		`, user.ID, *session.ChallengeTaskID).Scan(&alreadyCompleted)
+
+		// Si la requête ne retourne rien (task pas encore dans la table), err != nil et alreadyCompleted = false
+		wasNotCompleted := (err != nil || !alreadyCompleted)
 
 		// Insérer ou mettre à jour la progression de la tâche
 		_, err = database.DB.Exec(ctx, `
@@ -80,6 +90,15 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 			// Log l'erreur mais ne pas bloquer la création de la session
 			utils.Error(w, http.StatusInternalServerError, "could not update challenge task progress", err)
 			return
+		}
+
+		// Ajouter les points au score de l'utilisateur seulement si la task n'était pas déjà complétée
+		if wasNotCompleted && taskScore > 0 {
+			if err := utils.IncrementUserScore(ctx, user.ID, taskScore); err != nil {
+				// Log l'erreur mais ne pas bloquer la création de la session
+				utils.Error(w, http.StatusInternalServerError, "could not update user score for task", err)
+				return
+			}
 		}
 	}
 
@@ -109,6 +128,33 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		// Log l'erreur mais ne pas bloquer la création de la session
 		utils.Error(w, http.StatusInternalServerError, "could not update program usage count", err)
 		return
+	}
+
+	// Incrémenter le score de l'utilisateur si la session est complétée
+	if session.Completed {
+		// Récupérer la difficulté du programme pour calculer les points
+		var difficulty string
+		err := database.DB.QueryRow(ctx, `
+			SELECT difficulty FROM workout_programs WHERE id = $1
+		`, session.ProgramID).Scan(&difficulty)
+
+		if err == nil {
+			// Points basés sur la difficulté: BEGINNER=5, INTERMEDIATE=10, ADVANCED=15
+			points := 5
+			switch difficulty {
+			case "INTERMEDIATE":
+				points = 10
+			case "ADVANCED":
+				points = 15
+			}
+
+			// Incrémenter le score de l'utilisateur
+			if err := utils.IncrementUserScore(ctx, user.ID, points); err != nil {
+				// Log l'erreur mais ne pas bloquer la création de la session
+				utils.Error(w, http.StatusInternalServerError, "could not update user score", err)
+				return
+			}
+		}
 	}
 
 	utils.Success(w, session)

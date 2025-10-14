@@ -47,30 +47,24 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 func OptionalAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[INFO][OptionalAuth] Middleware activé\n")
 		ctx := r.Context()
 
 		token, err := GetToken(r)
 		if err != nil || token == "" {
-			// Pas de token → continuer sans user
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		fmt.Printf("[INFO][OptionalAuth] Token: %s\n", token)
 		ctx = context.WithValue(ctx, tokenContextKey, token)
 
 		user, err := validateTokenAndGetUser(ctx, token)
 		if err != nil || user == nil {
-			// Token invalide → continuer sans user
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		fmt.Printf("[INFO][OptionalAuth] User: %s (ID: %s)\n", user.Name, user.ID)
 		ctx = context.WithValue(ctx, userContextKey, *user)
 
-		// Appeler le handler avec le contexte mis à jour
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

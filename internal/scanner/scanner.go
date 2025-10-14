@@ -16,13 +16,13 @@ func ScanUserProfile(scanner interface {
 }) (*model.UserProfile, error) {
 	var user model.UserProfile
 	var avatar, goal sql.NullString
-	var age sql.NullInt64
+	var age, score sql.NullInt64
 	var weight, height sql.NullFloat64
 	var updatedBy sql.NullString
 
 	err := scanner.Scan(
 		&user.ID, &user.Name, &user.Email, &avatar,
-		&age, &weight, &height, &goal,
+		&age, &weight, &height, &goal, &score,
 		&user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
 		&user.CreatedBy, &updatedBy,
 	)
@@ -35,6 +35,7 @@ func ScanUserProfile(scanner interface {
 	user.Age = utils.NullInt64ToInt(age)
 	user.Weight = utils.NullFloat64ToFloat64(weight)
 	user.Height = utils.NullFloat64ToFloat64(height)
+	user.Score = utils.NullInt64ToInt(score)
 	user.UpdatedBy = utils.NullStringToPointer(updatedBy)
 
 	return &user, nil
