@@ -34,12 +34,13 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	// Insérer la session
 	err = database.DB.QueryRow(ctx, `
 		INSERT INTO workout_sessions(
-			program_id, user_id, start_time, end_time, total_reps, total_duration, completed, notes, created_at, updated_at
-		) VALUES($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-		RETURNING id, created_at, updated_at
+			program_id, user_id, start_time, end_time, total_reps, total_duration, completed, notes, created_at, created_by
+		) VALUES($1, $2, $3, NOW(), $4, $5, TRUE, $6, NOW(), $7)
+		RETURNING id, created_at, created_by
+		RETURNING id, created_at
 	`,
-		session.ProgramID, user.ID, session.StartTime, session.EndTime,
-		session.TotalReps, session.TotalDuration, session.Completed, session.Notes,
+		session.ProgramID, user.ID, session.StartTime,
+		session.TotalReps, session.TotalDuration, session.Notes, user.ID,
 	).Scan(&session.ID, &session.CreatedAt, &session.UpdatedAt)
 
 	if err != nil {
@@ -47,16 +48,38 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Si la session est liée à une tâche de challenge, mettre à jour la progression
 	if session.ChallengeID != nil && session.ChallengeTaskID != nil {
-		_, err := database.DB.Exec(ctx, `
-			INSERT INTO user_challenge_progress(
-				challenge_id, user_id, progress, current_reps, 
-				target_reps, attempts, completed_at, created_at, updated_at)
-			VALUES($1, $2, $3)
-		`, session.ID, *session.ChallengeID, *session.ChallengeTaskID)
+		// Récupérer les infos de la tâche pour obtenir le score
+		var taskScore *int
+		err := database.DB.QueryRow(ctx, `
+			SELECT score FROM challenge_tasks WHERE id = $1
+		`, *session.ChallengeTaskID).Scan(&taskScore)
 
 		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not save workout session", err)
+			// Log l'erreur mais ne pas bloquer la création de la session
+			utils.Error(w, http.StatusInternalServerError, "could not fetch task score", err)
+			return
+		}
+
+		// Insérer ou mettre à jour la progression de la tâche
+		_, err = database.DB.Exec(ctx, `
+			INSERT INTO user_challenge_task_progress(
+				user_id, task_id, challenge_id, completed, completed_at,
+				score, attempts, created_at, updated_at
+			)
+			VALUES($1, $2, $3, TRUE, NOW(), $4, 1, NOW(), NOW())
+			ON CONFLICT (user_id, task_id)
+			DO UPDATE SET
+				completed = TRUE,
+				completed_at = NOW(),
+				attempts = user_challenge_task_progress.attempts + 1,
+				updated_at = NOW()
+		`, user.ID, *session.ChallengeTaskID, *session.ChallengeID, taskScore)
+
+		if err != nil {
+			// Log l'erreur mais ne pas bloquer la création de la session
+			utils.Error(w, http.StatusInternalServerError, "could not update challenge task progress", err)
 			return
 		}
 	}
