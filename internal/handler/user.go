@@ -280,9 +280,9 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 		query = `
 			WITH date_range AS (
 				SELECT generate_series(
-					date_trunc('week', CURRENT_DATE),
-					CURRENT_DATE,
-					INTERVAL '1 day'
+					date_trunc('week', CURRENT_DATE),          -- lundi
+					date_trunc('week', CURRENT_DATE) + interval '6 days', -- dimanche
+					interval '1 day'
 				)::date AS date
 			)
 			SELECT
@@ -291,7 +291,8 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
 				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
 			FROM date_range dr
-			LEFT JOIN workout_sessions ws ON DATE(ws.start_time) = dr.date AND ws.user_id = $1
+			LEFT JOIN workout_sessions ws
+				ON DATE(ws.start_time) = dr.date AND ws.user_id = $1
 			GROUP BY dr.date
 			ORDER BY dr.date;
 		`
@@ -299,31 +300,47 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 
 	case "month":
 		query = `
+			WITH date_range AS (
+				SELECT generate_series(
+					date_trunc('month', CURRENT_DATE),
+					date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day',
+					interval '1 day'
+				)::date AS date
+			)
 			SELECT
-				DATE_TRUNC('day', ws.start_time)::date AS date,
+				dr.date,
 				COALESCE(SUM(ws.total_reps), 0) AS total_reps,
 				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
 				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
-			FROM workout_sessions ws
-			WHERE ws.user_id = $1
-				AND ws.start_time >= date_trunc('month', CURRENT_DATE)
-			GROUP BY DATE_TRUNC('day', ws.start_time)
-			ORDER BY date;
+			FROM date_range dr
+			LEFT JOIN workout_sessions ws
+				ON DATE(ws.start_time) = dr.date AND ws.user_id = $1
+			GROUP BY dr.date
+			ORDER BY dr.date;
+
 		`
 		args = append(args, userID)
 
 	case "year":
 		query = `
+			WITH month_range AS (
+				SELECT generate_series(
+					date_trunc('year', CURRENT_DATE),
+					date_trunc('year', CURRENT_DATE) + interval '11 months',
+					interval '1 month'
+				)::date AS month_start
+			)
 			SELECT
-				TO_CHAR(DATE_TRUNC('month', ws.start_time), 'YYYY-MM') AS date,
+				TO_CHAR(mr.month_start, 'YYYY-MM') AS date,
 				COALESCE(SUM(ws.total_reps), 0) AS total_reps,
 				COALESCE(SUM(ws.total_duration), 0) AS total_duration,
 				COALESCE(SUM(ws.total_reps) * 0.29, 0) AS calories
-			FROM workout_sessions ws
-			WHERE ws.user_id = $1
-				AND ws.start_time >= date_trunc('year', CURRENT_DATE)
-			GROUP BY DATE_TRUNC('month', ws.start_time)
-			ORDER BY date;
+			FROM month_range mr
+			LEFT JOIN workout_sessions ws
+				ON DATE_TRUNC('month', ws.start_time) = mr.month_start AND ws.user_id = $1
+			GROUP BY mr.month_start
+			ORDER BY mr.month_start;
+
 		`
 		args = append(args, userID)
 
