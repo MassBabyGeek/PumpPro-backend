@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
@@ -406,4 +407,115 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Success(w, updatedUser)
+}
+
+func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["userId"]
+
+	query := r.URL.Query()
+	startDate := query.Get("startDate")
+	endDate := query.Get("endDate")
+	programType := query.Get("programType")
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	ctx := context.Background()
+
+	sqlQuery := `
+		SELECT
+			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
+			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			ws.created_at, ws.updated_at
+		FROM workout_sessions ws
+		WHERE ws.user_id = $1
+	`
+
+	args := []interface{}{userID}
+	argCount := 2
+
+	if startDate != "" {
+		sqlQuery += " AND ws.start_time >= $" + strconv.Itoa(argCount)
+		args = append(args, startDate)
+		argCount++
+	}
+
+	if endDate != "" {
+		sqlQuery += " AND ws.start_time <= $" + strconv.Itoa(argCount)
+		args = append(args, endDate)
+		argCount++
+	}
+
+	if programType != "" {
+		sqlQuery += ` AND ws.program_id IN (
+			SELECT id FROM workout_programs WHERE type = $` + strconv.Itoa(argCount) + `
+		)`
+		args = append(args, programType)
+		argCount++
+	}
+
+	sqlQuery += " ORDER BY ws.start_time DESC"
+
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
+
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query workout sessions", err)
+		return
+	}
+	defer rows.Close()
+
+	var sessions []model.WorkoutSession
+	for rows.Next() {
+		session, err := scanner.ScanWorkoutSession(rows)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
+			return
+		}
+		sessions = append(sessions, *session)
+	}
+
+	// Charger les sets pour chaque session
+	for i := range sessions {
+		setRows, err := database.DB.Query(ctx, `
+			SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+			FROM set_results
+			WHERE session_id = $1
+			ORDER BY set_number ASC
+		`, sessions[i].ID)
+
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+			return
+		}
+
+		var sets []model.SetResult
+		for setRows.Next() {
+			set, err := scanner.ScanSetResult(setRows)
+			if err != nil {
+				setRows.Close()
+				utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+				return
+			}
+			sets = append(sets, *set)
+		}
+		setRows.Close()
+		sessions[i].Sets = sets
+	}
+
+	utils.Success(w, sessions)
 }

@@ -115,11 +115,8 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, session)
 }
 
-// GetWorkoutSessions récupère les sessions d'entraînement d'un utilisateur avec filtres
+// GetWorkoutSessions récupère toutes les sessions d'entraînement avec filtres
 func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := vars["userId"]
-
 	query := r.URL.Query()
 	startDate := query.Get("startDate")
 	endDate := query.Get("endDate")
@@ -135,11 +132,11 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
 			ws.created_at, ws.updated_at
 		FROM workout_sessions ws
-		WHERE ws.user_id = $1
+		WHERE 1=1
 	`
 
-	args := []interface{}{userID}
-	argCount := 2
+	args := []interface{}{}
+	argCount := 1
 
 	if startDate != "" {
 		sqlQuery += " AND ws.start_time >= $" + strconv.Itoa(argCount)

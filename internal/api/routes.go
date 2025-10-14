@@ -84,7 +84,7 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.DeleteWorkoutSession).Methods(http.MethodDelete)
 
 	// User workout sessions
-	r.HandleFunc("/users/{userId}/workouts", handler.GetWorkoutSessions).Methods(http.MethodGet)
+	r.HandleFunc("/users/{userId}/workouts", handler.GetUsersWorkoutSessions).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/workouts/stats", handler.GetWorkoutStats).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/workouts/summary", handler.GetWorkoutSummary).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/workouts/records", handler.GetPersonalRecords).Methods(http.MethodGet)
