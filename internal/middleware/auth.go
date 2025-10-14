@@ -89,6 +89,7 @@ func validateTokenAndGetUser(ctx context.Context, token string) (*model.UserProf
 		u.weight,
 		u.height,
 		u.goal,
+		u.score,
 		u.join_date,
 		u.created_at,
 		u.updated_at,
