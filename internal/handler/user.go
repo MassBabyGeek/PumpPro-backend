@@ -189,7 +189,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 // GetUserStats récupère les statistiques d'un utilisateur
 func GetUserStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	userId := vars["id"]
+	userId := vars["userId"]
 	period := vars["period"]
 
 	if userId == "" {
@@ -267,7 +267,7 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 // GetChartData récupère les données pour les graphiques
 func GetChartData(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	userID := vars["id"]
+	userID := vars["userId"]
 	period := vars["period"] // week, month, year
 
 	ctx := context.Background()

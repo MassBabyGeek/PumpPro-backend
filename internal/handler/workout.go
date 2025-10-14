@@ -37,11 +37,10 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 			program_id, user_id, start_time, end_time, total_reps, total_duration, completed, notes, created_at, created_by
 		) VALUES($1, $2, $3, NOW(), $4, $5, TRUE, $6, NOW(), $7)
 		RETURNING id, created_at, created_by
-		RETURNING id, created_at
 	`,
 		session.ProgramID, user.ID, session.StartTime,
 		session.TotalReps, session.TotalDuration, session.Notes, user.ID,
-	).Scan(&session.ID, &session.CreatedAt, &session.UpdatedAt)
+	).Scan(&session.ID, &session.CreatedAt, &session.CreatedBy)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not save workout session", err)

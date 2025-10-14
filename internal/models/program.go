@@ -44,9 +44,9 @@ type WorkoutSession struct {
 	TotalDuration   int         `json:"totalDuration"` // en secondes
 	Completed       bool        `json:"completed"`
 	Notes           *string     `json:"notes,omitempty"`
-	CreatedAt       time.Time   `json:"createdAt"`
-	UpdatedAt       time.Time   `json:"updatedAt"`
 	Sets            []SetResult `json:"sets"`
+
+	DateFields
 }
 
 type SetResult struct {
