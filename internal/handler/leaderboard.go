@@ -59,6 +59,7 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -89,7 +90,7 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
-				WHERE ws.start_time >= $1
+				WHERE ws.start_time >= $1 AND ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -182,6 +183,7 @@ func GetUserRank(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -209,7 +211,7 @@ func GetUserRank(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
-				WHERE ws.start_time >= $1
+				WHERE ws.start_time >= $1 AND ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -304,6 +306,7 @@ func GetNearbyUsers(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -337,7 +340,7 @@ func GetNearbyUsers(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
-				WHERE ws.start_time >= $1
+				WHERE ws.start_time >= $1 AND ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -428,6 +431,7 @@ func GetTopPerformers(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -458,7 +462,7 @@ func GetTopPerformers(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
-				WHERE ws.start_time >= $1
+				WHERE ws.start_time >= $1 AND ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -627,6 +631,7 @@ func GetFriendsLeaderboard(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
@@ -657,7 +662,7 @@ func GetFriendsLeaderboard(w http.ResponseWriter, r *http.Request) {
 					ws.user_id,
 					SUM(ws.total_reps) as score
 				FROM workout_sessions ws
-				WHERE ws.start_time >= $1
+				WHERE ws.start_time >= $1 AND ws.completed = TRUE
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
