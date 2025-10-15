@@ -79,12 +79,12 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		     weight = COALESCE($4, weight),
 		     height = COALESCE($5, height),
 		     goal = COALESCE(NULLIF($6, ''), goal),
+		     email = COALESCE(NULLIF($7, ''), email),
 		     updated_at = NOW(),
-		     updated_by = $7
-			 email = COALESCE(NULLIF($8, ''), email),
-		 WHERE id = $8 AND deleted_at IS NULL`,
-		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal, user.ID, user.Email,
-		user.ID,
+		     updated_by = $8
+		 WHERE id = $9 AND deleted_at IS NULL`,
+		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal, user.Email,
+		user.ID, user.ID,
 	)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not update user", err)
