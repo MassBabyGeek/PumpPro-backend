@@ -84,7 +84,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		     updated_by = $8
 		 WHERE id = $9 AND deleted_at IS NULL`,
 		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal, user.Email,
-		user.ID, user.ID,
+		userFromContext.ID, userFromContext.ID,
 	)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not update user", err)
