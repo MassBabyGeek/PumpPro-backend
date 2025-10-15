@@ -1,13 +1,17 @@
 package model
 
 type LeaderboardEntry struct {
-	UserID   string   `json:"userId"`
-	UserName string   `json:"userName"`
-	Avatar   *string  `json:"avatar,omitempty"`
-	Rank     int      `json:"rank"`
-	Score    int      `json:"score"`
-	Change   *int     `json:"change,omitempty"`
-	Badges   []string `json:"badges,omitempty"`
+	UserID          string   `json:"userId"`
+	UserName        string   `json:"userName"`
+	Avatar          *string  `json:"avatar,omitempty"`
+	Rank            int      `json:"rank"`
+	Score           int      `json:"score"` // Total de pompes
+	TotalCalories   float64  `json:"totalCalories"`
+	TotalSessions   int      `json:"totalSessions"`
+	BestSessionReps int      `json:"bestSessionReps"`
+	CurrentStreak   int      `json:"currentStreak"` // Jours consécutifs d'entraînement
+	Change          *int     `json:"change,omitempty"`
+	Badges          []string `json:"badges,omitempty"`
 }
 
 type UserRank struct {

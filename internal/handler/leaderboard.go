@@ -54,20 +54,42 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	if period == "all-time" {
 		sqlQuery = `
-			WITH user_scores AS (
+			WITH user_stats AS (
 				SELECT
 					ws.user_id,
-					SUM(ws.total_reps) as score
+					SUM(ws.total_reps) as total_reps,
+					COUNT(*) as total_sessions,
+					MAX(ws.total_reps) as best_session_reps
 				FROM workout_sessions ws
 				WHERE ws.completed = TRUE
+				GROUP BY ws.user_id
+			),
+			user_streaks AS (
+				SELECT
+					ws.user_id,
+					COUNT(DISTINCT DATE(ws.start_time)) as current_streak
+				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
+				AND DATE(ws.start_time) >= CURRENT_DATE - (
+					SELECT COUNT(DISTINCT DATE(w.start_time))
+					FROM workout_sessions w
+					WHERE w.user_id = ws.user_id
+					AND w.completed = TRUE
+					AND DATE(w.start_time) >= CURRENT_DATE - INTERVAL '365 days'
+				)
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
 				SELECT
 					us.user_id,
-					us.score,
-					ROW_NUMBER() OVER (ORDER BY us.score DESC) as rank
-				FROM user_scores us
+					us.total_reps as score,
+					us.total_sessions,
+					us.best_session_reps,
+					COALESCE(ust.current_streak, 0) as current_streak,
+					us.total_reps * 0.29 as total_calories,
+					ROW_NUMBER() OVER (ORDER BY us.total_reps DESC) as rank
+				FROM user_stats us
+				LEFT JOIN user_streaks ust ON us.user_id = ust.user_id
 			)
 			SELECT
 				ru.user_id,
@@ -75,6 +97,10 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 				u.avatar,
 				ru.rank,
 				ru.score,
+				ru.total_calories,
+				ru.total_sessions,
+				ru.best_session_reps,
+				ru.current_streak,
 				0 as change
 			FROM ranked_users ru
 			INNER JOIN users u ON ru.user_id = u.id
@@ -85,20 +111,36 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 		args = []interface{}{limit}
 	} else {
 		sqlQuery = `
-			WITH user_scores AS (
+			WITH user_stats AS (
 				SELECT
 					ws.user_id,
-					SUM(ws.total_reps) as score
+					SUM(ws.total_reps) as total_reps,
+					COUNT(*) as total_sessions,
+					MAX(ws.total_reps) as best_session_reps
 				FROM workout_sessions ws
 				WHERE ws.start_time >= $1 AND ws.completed = TRUE
+				GROUP BY ws.user_id
+			),
+			user_streaks AS (
+				SELECT
+					ws.user_id,
+					COUNT(DISTINCT DATE(ws.start_time)) as current_streak
+				FROM workout_sessions ws
+				WHERE ws.completed = TRUE
+				AND DATE(ws.start_time) >= $1
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
 				SELECT
 					us.user_id,
-					us.score,
-					ROW_NUMBER() OVER (ORDER BY us.score DESC) as rank
-				FROM user_scores us
+					us.total_reps as score,
+					us.total_sessions,
+					us.best_session_reps,
+					COALESCE(ust.current_streak, 0) as current_streak,
+					us.total_reps * 0.29 as total_calories,
+					ROW_NUMBER() OVER (ORDER BY us.total_reps DESC) as rank
+				FROM user_stats us
+				LEFT JOIN user_streaks ust ON us.user_id = ust.user_id
 			)
 			SELECT
 				ru.user_id,
@@ -106,6 +148,10 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 				u.avatar,
 				ru.rank,
 				ru.score,
+				ru.total_calories,
+				ru.total_sessions,
+				ru.best_session_reps,
+				ru.current_streak,
 				0 as change
 			FROM ranked_users ru
 			INNER JOIN users u ON ru.user_id = u.id
@@ -128,7 +174,9 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 		var entry model.LeaderboardEntry
 		if err := rows.Scan(
 			&entry.UserID, &entry.UserName, &entry.Avatar,
-			&entry.Rank, &entry.Score, &entry.Change,
+			&entry.Rank, &entry.Score, &entry.TotalCalories,
+			&entry.TotalSessions, &entry.BestSessionReps, &entry.CurrentStreak,
+			&entry.Change,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan leaderboard row", err)
 			return
