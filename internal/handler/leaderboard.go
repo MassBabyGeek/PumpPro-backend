@@ -70,13 +70,7 @@ func GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 					COUNT(DISTINCT DATE(ws.start_time)) as current_streak
 				FROM workout_sessions ws
 				WHERE ws.completed = TRUE
-				AND DATE(ws.start_time) >= CURRENT_DATE - (
-					SELECT COUNT(DISTINCT DATE(w.start_time))
-					FROM workout_sessions w
-					WHERE w.user_id = ws.user_id
-					AND w.completed = TRUE
-					AND DATE(w.start_time) >= CURRENT_DATE - INTERVAL '365 days'
-				)
+				AND DATE(ws.start_time) >= CURRENT_DATE - INTERVAL '365 days'
 				GROUP BY ws.user_id
 			),
 			ranked_users AS (
