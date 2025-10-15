@@ -59,13 +59,13 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := middleware.GetUserFromContext(r)
+	userFromContext, err := middleware.GetUserFromContext(r)
 	if err != nil {
 		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return
 	}
 
-	if user.ID != userId {
+	if userFromContext.ID != userId {
 		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de modifier l'utilisateur")
 		return
 	}
