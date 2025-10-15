@@ -111,6 +111,14 @@ func SetupRouter() http.Handler {
 	// Health check
 	r.HandleFunc("/health", handler.HealthCheck).Methods(http.MethodGet)
 
+	// Bug reports / Signalements
+	r.HandleFunc("/bug-reports", handler.CreateBugReport).Methods(http.MethodPost)
+	r.HandleFunc("/bug-reports", handler.GetBugReports).Methods(http.MethodGet)
+	r.HandleFunc("/bug-reports/stats", handler.GetBugReportStats).Methods(http.MethodGet)
+	r.HandleFunc("/bug-reports/{id}", handler.GetBugReportById).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.UpdateBugReport).Methods(http.MethodPut, http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.DeleteBugReport).Methods(http.MethodDelete)
+
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		utils.LogError("404 Not Found: %s %s", r.Method, r.URL.Path)
 		color.Yellow("[404] %s %s (route non trouvée)", r.Method, r.URL.Path)

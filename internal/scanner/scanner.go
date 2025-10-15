@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -375,4 +376,42 @@ func ScanUserChallengeTaskProgress(scanner interface {
 	}
 
 	return &progress, nil
+}
+
+
+// ScanBugReport scanne une ligne SQL vers un BugReport
+func ScanBugReport(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.BugReport, error) {
+	var report model.BugReport
+	var userID, appVersion, pageURL, errorStack, screenshotURL, userEmail, resolvedBy, adminNotes sql.NullString
+	var deviceInfoBytes []byte
+	var resolvedAt sql.NullTime
+
+	err := scanner.Scan(
+		&report.ID, &userID, &report.Title, &report.Description,
+		&report.Category, &report.Severity, &report.Status,
+		&deviceInfoBytes, &appVersion, &pageURL, &errorStack, &screenshotURL,
+		&userEmail, &report.CreatedAt, &report.UpdatedAt,
+		&resolvedAt, &resolvedBy, &adminNotes,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	report.UserID = utils.NullStringToPointer(userID)
+	report.AppVersion = utils.NullStringToPointer(appVersion)
+	report.PageURL = utils.NullStringToPointer(pageURL)
+	report.ErrorStack = utils.NullStringToPointer(errorStack)
+	report.ScreenshotURL = utils.NullStringToPointer(screenshotURL)
+	report.UserEmail = utils.NullStringToPointer(userEmail)
+	report.ResolvedBy = utils.NullStringToPointer(resolvedBy)
+	report.AdminNotes = utils.NullStringToPointer(adminNotes)
+	report.ResolvedAt = utils.NullTimeToPointer(resolvedAt)
+
+	if len(deviceInfoBytes) > 0 {
+		report.DeviceInfo = json.RawMessage(deviceInfoBytes)
+	}
+
+	return &report, nil
 }
