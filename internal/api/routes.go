@@ -18,6 +18,9 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
 	authenticatedRoutes.Use(middleware.LoggerMiddleware)
 
+	// Root - API documentation
+	r.HandleFunc("/", handler.RootHandler).Methods(http.MethodGet)
+
 	// Auth
 	r.HandleFunc("/auth/login", handler.Login).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/auth/logout", handler.Logout).Methods(http.MethodPost)
