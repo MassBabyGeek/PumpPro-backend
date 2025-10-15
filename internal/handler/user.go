@@ -81,9 +81,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		     goal = COALESCE(NULLIF($6, ''), goal),
 		     updated_at = NOW(),
 		     updated_by = $7
+			 email = COALESCE(NULLIF($8, ''), email),
 		 WHERE id = $8 AND deleted_at IS NULL`,
-		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal,
-		user.ID, // ici UpdatedBy = userID pour l'instant
+		user.Name, user.Avatar, user.Age, user.Weight, user.Height, user.Goal, user.ID, user.Email,
 		user.ID,
 	)
 	if err != nil {
