@@ -22,12 +22,13 @@ func LoggerMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start)
 		status := wrapped.statusCode
 
-		// Coloriser selon le statut
+		color.Yellow("[INFO] %s %s → %d (%v)", r.Method, r.URL.Path)
+
 		switch {
 		case status >= 500:
 			color.Red("[SERVER ERROR] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
 		case status >= 400:
-			color.Yellow("[CLIENT ERROR] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
+			color.Red("[CLIENT ERROR] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
 		default:
 			color.Green("[OK] %s %s → %d (%v)", r.Method, r.URL.Path, status, duration)
 		}
