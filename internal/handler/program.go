@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
@@ -16,6 +17,13 @@ import (
 // GetPrograms récupère tous les programmes avec filtres optionnels
 func GetPrograms(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
+
+	// Récupérer l'utilisateur optionnel depuis le contexte
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
 
 	// Récupérer les paramètres de filtrage
 	query := r.URL.Query()
@@ -30,7 +38,7 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL
@@ -88,6 +96,15 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
 		}
+
+		// Populate UserLiked field if user is authenticated
+		if userID != nil {
+			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeProgram, program.ID)
+			if err == nil {
+				program.UserLiked = likeInfo.UserLiked
+			}
+		}
+
 		programs = append(programs, *program)
 	}
 
@@ -101,12 +118,19 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Récupérer l'utilisateur optionnel depuis le contexte
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	row := database.DB.QueryRow(ctx, `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE id=$1 AND deleted_at IS NULL
@@ -116,6 +140,14 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "program not found", err)
 		return
+	}
+
+	// Populate UserLiked field if user is authenticated
+	if userID != nil {
+		likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeProgram, program.ID)
+		if err == nil {
+			program.UserLiked = likeInfo.UserLiked
+		}
 	}
 
 	utils.Success(w, program)
@@ -281,7 +313,7 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND difficulty='INTERMEDIATE'
@@ -304,7 +336,7 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+			&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
@@ -315,11 +347,14 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
 		}
 
+		// Populate UserLiked field
+		likeInfo, err := utils.GetLikeInfo(ctx, &userID, model.EntityTypeProgram, p.ID)
+		if err == nil {
+			p.UserLiked = likeInfo.UserLiked
+		}
+
 		programs = append(programs, p)
 	}
-
-	// Éviter erreur unused variable
-	_ = userID
 
 	utils.Success(w, programs)
 }
@@ -331,12 +366,19 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND difficulty=$1
@@ -358,7 +400,7 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+			&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
@@ -367,6 +409,14 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 
 		if repsSequenceJSON != nil {
 			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
+		}
+
+		// Populate UserLiked field if user is authenticated
+		if userID != nil {
+			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeProgram, p.ID)
+			if err == nil {
+				p.UserLiked = likeInfo.UserLiked
+			}
 		}
 
 		programs = append(programs, p)
@@ -387,7 +437,7 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND is_custom=true AND created_by=$1
@@ -409,7 +459,7 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+			&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
@@ -418,6 +468,12 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 
 		if repsSequenceJSON != nil {
 			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
+		}
+
+		// Populate UserLiked field for the requesting user
+		likeInfo, err := utils.GetLikeInfo(ctx, &userID, model.EntityTypeProgram, p.ID)
+		if err == nil {
+			p.UserLiked = likeInfo.UserLiked
 		}
 
 		programs = append(programs, p)
@@ -528,12 +584,19 @@ func DuplicateProgram(w http.ResponseWriter, r *http.Request) {
 func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND is_featured=true
@@ -556,7 +619,7 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+			&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
@@ -565,6 +628,14 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 
 		if repsSequenceJSON != nil {
 			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
+		}
+
+		// Populate UserLiked field if user is authenticated
+		if userID != nil {
+			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeProgram, p.ID)
+			if err == nil {
+				p.UserLiked = likeInfo.UserLiked
+			}
 		}
 
 		programs = append(programs, p)
@@ -585,12 +656,19 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	rows, err := database.DB.Query(ctx, `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
 			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
 			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
 		FROM workout_programs
 		WHERE deleted_at IS NULL
@@ -613,7 +691,7 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 			&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 			&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 			&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-			&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+			&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 			&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		); err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
@@ -622,6 +700,14 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 
 		if repsSequenceJSON != nil {
 			json.Unmarshal(repsSequenceJSON, &p.RepsSequence)
+		}
+
+		// Populate UserLiked field if user is authenticated
+		if userID != nil {
+			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeProgram, p.ID)
+			if err == nil {
+				p.UserLiked = likeInfo.UserLiked
+			}
 		}
 
 		programs = append(programs, p)

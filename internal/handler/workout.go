@@ -171,10 +171,18 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	sqlQuery := `
 		SELECT
 			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
 			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) as likes,
 			ws.created_at, ws.updated_at
 		FROM workout_sessions ws
 		WHERE 1=1
@@ -235,6 +243,15 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
 		}
+
+		// Populate UserLiked field if user is authenticated
+		if userID != nil {
+			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeWorkout, session.ID)
+			if err == nil {
+				session.UserLiked = likeInfo.UserLiked
+			}
+		}
+
 		sessions = append(sessions, *session)
 	}
 
@@ -364,23 +381,40 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var userID *string
+	if user.ID != "" {
+		userID = &user.ID
+	}
+
 	var session model.WorkoutSession
 	err := database.DB.QueryRow(ctx, `
 		SELECT
 			id, program_id, user_id, start_time, end_time,
 			total_reps, total_duration, completed, notes,
+			COALESCE(likes, 0) as likes,
 			created_at, updated_at
 		FROM workout_sessions
 		WHERE id = $1
 	`, sessionID).Scan(
 		&session.ID, &session.ProgramID, &session.UserID, &session.StartTime, &session.EndTime,
 		&session.TotalReps, &session.TotalDuration, &session.Completed, &session.Notes,
+		&session.Likes,
 		&session.CreatedAt, &session.UpdatedAt,
 	)
 
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "session not found", err)
 		return
+	}
+
+	// Populate UserLiked field if user is authenticated
+	if userID != nil {
+		likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeWorkout, session.ID)
+		if err == nil {
+			session.UserLiked = likeInfo.UserLiked
+		}
 	}
 
 	// Charger les sets associés
@@ -470,24 +504,41 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var authenticatedUserID *string
+	if user.ID != "" {
+		authenticatedUserID = &user.ID
+	}
+
 	// Récupérer la session mise à jour
 	var session model.WorkoutSession
 	err = database.DB.QueryRow(ctx, `
 		SELECT
 			id, program_id, user_id, start_time, end_time,
 			total_reps, total_duration, completed, notes,
+			COALESCE(likes, 0) as likes,
 			created_at, updated_at
 		FROM workout_sessions
 		WHERE id = $1
 	`, sessionID).Scan(
 		&session.ID, &session.ProgramID, &session.UserID, &session.StartTime, &session.EndTime,
 		&session.TotalReps, &session.TotalDuration, &session.Completed, &session.Notes,
+		&session.Likes,
 		&session.CreatedAt, &session.UpdatedAt,
 	)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch updated session", err)
 		return
+	}
+
+	// Populate UserLiked field if user is authenticated
+	if authenticatedUserID != nil {
+		likeInfo, err := utils.GetLikeInfo(ctx, authenticatedUserID, model.EntityTypeWorkout, session.ID)
+		if err == nil {
+			session.UserLiked = likeInfo.UserLiked
+		}
 	}
 
 	// Charger les sets associés

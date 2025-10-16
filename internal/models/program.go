@@ -28,6 +28,8 @@ type WorkoutProgram struct {
 	IsCustom   bool `json:"isCustom"`
 	IsFeatured bool `json:"isFeatured"`
 	UsageCount int  `json:"usageCount"` // Nombre de fois utilisé
+	Likes      int  `json:"likes"`
+	UserLiked  bool `json:"userLiked,omitempty"`
 
 	DateFields
 }
@@ -45,6 +47,8 @@ type WorkoutSession struct {
 	Completed       bool        `json:"completed"`
 	Notes           *string     `json:"notes,omitempty"`
 	Sets            []SetResult `json:"sets"`
+	Likes           int         `json:"likes"`
+	UserLiked       bool        `json:"userLiked,omitempty"`
 
 	DateFields
 }

@@ -179,7 +179,13 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 				AND uctp.completed = TRUE
 				LIMIT 1
 			), FALSE) AS user_completed,
-			FALSE AS user_liked,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'challenge'
+				AND l.entity_id = c.id
+				AND l.user_id = $` + strconv.Itoa(argCount) + `
+			), FALSE) AS user_liked,
 			COALESCE((
 				SELECT TRUE
 				FROM user_challenge_task_progress uctp
@@ -302,7 +308,13 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 					LIMIT 1
 				), FALSE) AS user_completed,
 
-				FALSE AS user_liked,
+				COALESCE((
+					SELECT TRUE
+					FROM likes l
+					WHERE l.entity_type = 'challenge'
+					  AND l.entity_id = c.id
+					  AND l.user_id = $2
+				), FALSE) AS user_liked,
 
 				COALESCE((
 					SELECT TRUE
@@ -781,7 +793,16 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 			c.target_reps, c.duration, c.sets, c.reps_per_set, c.image_url,
 			c.icon_name, c.icon_color, c.participants, c.completions, c.likes, c.points,
 			c.badge, c.start_date, c.end_date, c.status, c.tags, c.is_official,
-			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at
+			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at,
+			TRUE AS user_completed,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'challenge'
+				AND l.entity_id = c.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
+			TRUE AS user_participated
 		FROM challenges c
 		INNER JOIN user_challenge_progress ucp ON c.id = ucp.challenge_id
 		WHERE ucp.user_id=$1 AND ucp.progress < 100 AND c.deleted_at IS NULL
@@ -796,7 +817,7 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 
 	var challenges []model.Challenge
 	for rows.Next() {
-		challenge, err := scanner.ScanChallengeWithPqArray(rows)
+		challenge, err := scanner.ScanChallenge(rows)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
@@ -829,7 +850,16 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 			c.target_reps, c.duration, c.sets, c.reps_per_set, c.image_url,
 			c.icon_name, c.icon_color, c.participants, c.completions, c.likes, c.points,
 			c.badge, c.start_date, c.end_date, c.status, c.tags, c.is_official,
-			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at
+			c.created_by, c.updated_by, c.deleted_by, c.created_at, c.updated_at, c.deleted_at,
+			TRUE AS user_completed,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'challenge'
+				AND l.entity_id = c.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
+			TRUE AS user_participated
 		FROM challenges c
 		INNER JOIN user_challenge_progress ucp ON c.id = ucp.challenge_id
 		WHERE ucp.user_id=$1 AND ucp.progress = 100 AND c.deleted_at IS NULL
@@ -844,7 +874,7 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 
 	var challenges []model.Challenge
 	for rows.Next() {
-		challenge, err := scanner.ScanChallengeWithPqArray(rows)
+		challenge, err := scanner.ScanChallenge(rows)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan challenge row", err)
 			return
