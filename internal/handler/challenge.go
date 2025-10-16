@@ -486,18 +486,16 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	challengeID := vars["id"]
 
-	var payload struct {
-		UserID string `json:"userId"`
-	}
-	if err := utils.DecodeJSON(r, &payload); err != nil {
-		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
 		return
 	}
 
 	ctx := context.Background()
 
 	// Utiliser le système unifié de likes
-	err := utils.AddLike(ctx, payload.UserID, model.EntityTypeChallenge, challengeID)
+	err = utils.AddLike(ctx, user.ID, model.EntityTypeChallenge, challengeID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not add like", err)
 		return
