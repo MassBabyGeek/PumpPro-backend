@@ -119,6 +119,12 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.UpdateBugReport).Methods(http.MethodPut, http.MethodPatch)
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.DeleteBugReport).Methods(http.MethodDelete)
 
+	// Likes system (générique)
+	authenticatedRoutes.HandleFunc("/likes/{entityType}/{entityId}/toggle", handler.ToggleLike).Methods(http.MethodPost)
+	r.HandleFunc("/likes/{entityType}/{entityId}", handler.GetLikeStatus).Methods(http.MethodGet)
+	r.HandleFunc("/likes/users/{userId}", handler.GetUserLikedEntities).Methods(http.MethodGet)
+	r.HandleFunc("/likes/top", handler.GetTopLiked).Methods(http.MethodGet)
+
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		utils.LogError("404 Not Found: %s %s", r.Method, r.URL.Path)
 		color.Yellow("[404] %s %s (route non trouvée)", r.Method, r.URL.Path)

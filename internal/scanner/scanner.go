@@ -415,3 +415,19 @@ func ScanBugReport(scanner interface {
 
 	return &report, nil
 }
+
+// ScanLike scanne une ligne SQL vers un Like
+func ScanLike(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Like, error) {
+	var like model.Like
+	
+	err := scanner.Scan(
+		&like.ID, &like.UserID, &like.EntityType, &like.EntityID, &like.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &like, nil
+}
