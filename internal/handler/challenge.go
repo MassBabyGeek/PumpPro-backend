@@ -527,7 +527,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 			), FALSE) AS user_participated
 		FROM challenges
 		WHERE id=$1
-	`, challengeID, payload.UserID)
+	`, challengeID, user.ID)
 
 	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
@@ -536,7 +536,7 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Charger les tasks du challenge avec la progression utilisateur
-	tasks, err := loadChallengeTasks(ctx, challenge.ID, &payload.UserID)
+	tasks, err := loadChallengeTasks(ctx, challenge.ID, &user.ID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 		return
