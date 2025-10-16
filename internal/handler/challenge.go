@@ -550,12 +550,16 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	challengeID := vars["id"]
-	userID := r.URL.Query().Get("userId")
 
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
 	ctx := context.Background()
 
 	// Utiliser le système unifié de likes
-	err := utils.RemoveLike(ctx, userID, model.EntityTypeChallenge, challengeID)
+	err = utils.RemoveLike(ctx, user.ID, model.EntityTypeChallenge, challengeID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not remove like", err)
 		return
@@ -587,7 +591,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 			), FALSE) AS user_participated
 		FROM challenges
 		WHERE id=$1
-	`, challengeID, userID)
+	`, challengeID, user.ID)
 
 	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
@@ -596,7 +600,7 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Charger les tasks du challenge avec la progression utilisateur
-	tasks, err := loadChallengeTasks(ctx, challenge.ID, &userID)
+	tasks, err := loadChallengeTasks(ctx, challenge.ID, &user.ID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not load challenge tasks", err)
 		return
