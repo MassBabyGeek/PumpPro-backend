@@ -156,6 +156,7 @@ func ScanWorkoutSession(scanner interface {
 	err := scanner.Scan(
 		&s.ID, &s.ProgramID, &s.UserID, &s.StartTime, &s.EndTime,
 		&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
+		&s.Likes,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -179,7 +180,7 @@ func ScanSetResult(scanner interface {
 	return &s, nil
 }
 
-// ✅ ScanWorkoutProgramWithJSON corrigée (NullTime-safe)
+// ✅ ScanWorkoutProgramWithJSON corrigée (NullTime-safe + Likes)
 func ScanWorkoutProgramWithJSON(scanner interface {
 	Scan(dest ...interface{}) error
 }, unmarshalJSON func([]byte, interface{}) error) (*model.WorkoutProgram, error) {
@@ -192,7 +193,7 @@ func ScanWorkoutProgramWithJSON(scanner interface {
 		&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
 		&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
 		&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
-		&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+		&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 		&createdBy, &updatedBy, &deletedBy,
 		&createdAt, &updatedAt, &deletedAt,
 	)
@@ -233,7 +234,7 @@ func ScanWorkoutProgram(scanner interface {
 		&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty,
 		&p.RestBetweenSets, &p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest,
 		&p.Sets, &p.RepsPerSet, &repsSequence, &p.RepsPerMinute, &p.TotalMinutes,
-		&p.IsCustom, &p.IsFeatured, &p.UsageCount,
+		&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
 		&p.CreatedBy, &p.UpdatedBy, &p.DeletedBy,
 		&createdAt, &updatedAt, &deletedAt,
 	)
