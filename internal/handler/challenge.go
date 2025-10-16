@@ -496,42 +496,10 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Vérifier si l'utilisateur a déjà liké
-	var exists bool
-	err := database.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM challenge_likes WHERE challenge_id=$1 AND user_id=$2)`,
-		challengeID, payload.UserID,
-	).Scan(&exists)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not check like", err)
-		return
-	}
-
-	if exists {
-		utils.ErrorSimple(w, http.StatusBadRequest, "challenge already liked")
-		return
-	}
-
-	// Ajouter le like
-	_, err = database.DB.Exec(ctx,
-		`INSERT INTO challenge_likes(challenge_id, user_id, created_at) VALUES($1, $2, NOW())`,
-		challengeID, payload.UserID,
-	)
-
+	// Utiliser le système unifié de likes
+	err := utils.AddLike(ctx, payload.UserID, model.EntityTypeChallenge, challengeID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not add like", err)
-		return
-	}
-
-	// Incrémenter le compteur de likes
-	_, err = database.DB.Exec(ctx,
-		`UPDATE challenges SET likes = likes + 1 WHERE id=$1`,
-		challengeID,
-	)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not increment likes", err)
 		return
 	}
 
@@ -542,12 +510,28 @@ func LikeChallenge(w http.ResponseWriter, r *http.Request) {
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
 			badge, start_date, end_date, status, tags, is_official,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = id
+				  AND uctp.user_id = $2
+				  AND uctp.completed = TRUE
+				LIMIT 1
+			), FALSE) AS user_completed,
+			TRUE AS user_liked,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = id
+				  AND uctp.user_id = $2
+				LIMIT 1
+			), FALSE) AS user_participated
 		FROM challenges
 		WHERE id=$1
-	`, challengeID)
+	`, challengeID, payload.UserID)
 
-	challenge, err := scanner.ScanChallengeWithPqArray(row)
+	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
@@ -572,30 +556,10 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Supprimer le like
-	res, err := database.DB.Exec(ctx,
-		`DELETE FROM challenge_likes WHERE challenge_id=$1 AND user_id=$2`,
-		challengeID, userID,
-	)
-
+	// Utiliser le système unifié de likes
+	err := utils.RemoveLike(ctx, userID, model.EntityTypeChallenge, challengeID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not remove like", err)
-		return
-	}
-
-	if res.RowsAffected() == 0 {
-		utils.ErrorSimple(w, http.StatusNotFound, "like not found")
-		return
-	}
-
-	// Décrémenter le compteur de likes
-	_, err = database.DB.Exec(ctx,
-		`UPDATE challenges SET likes = GREATEST(likes - 1, 0) WHERE id=$1`,
-		challengeID,
-	)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not decrement likes", err)
 		return
 	}
 
@@ -606,12 +570,28 @@ func UnlikeChallenge(w http.ResponseWriter, r *http.Request) {
 			target_reps, duration, sets, reps_per_set, image_url,
 			icon_name, icon_color, participants, completions, likes, points,
 			badge, start_date, end_date, status, tags, is_official,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = id
+				  AND uctp.user_id = $2
+				  AND uctp.completed = TRUE
+				LIMIT 1
+			), FALSE) AS user_completed,
+			FALSE AS user_liked,
+			COALESCE((
+				SELECT TRUE
+				FROM user_challenge_task_progress uctp
+				WHERE uctp.challenge_id = id
+				  AND uctp.user_id = $2
+				LIMIT 1
+			), FALSE) AS user_participated
 		FROM challenges
 		WHERE id=$1
-	`, challengeID)
+	`, challengeID, userID)
 
-	challenge, err := scanner.ScanChallengeWithPqArray(row)
+	challenge, err := scanner.ScanChallenge(row)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch challenge", err)
 		return
