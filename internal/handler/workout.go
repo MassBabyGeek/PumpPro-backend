@@ -732,3 +732,155 @@ func GetSetResults(w http.ResponseWriter, r *http.Request) {
 
 	utils.Success(w, results)
 }
+
+// LikeWorkout ajoute un like à une session de travail
+func LikeWorkout(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Utiliser le système unifié de likes
+	err = utils.AddLike(ctx, user.ID, model.EntityTypeWorkout, sessionID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not add like", err)
+		return
+	}
+
+	// Incrémenter le compteur de likes
+	_, err = database.DB.Exec(ctx, `
+		UPDATE workout_sessions SET likes = likes + 1 WHERE id=$1`,
+		sessionID,
+	)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not increment likes", err)
+		return
+	}
+
+	// Retourner le session mis à jour
+	row := database.DB.QueryRow(ctx, `
+		SELECT
+			id, program_id, user_id, start_time, end_time,
+			total_reps, total_duration, completed, notes,
+			COALESCE(likes, 0) as likes,
+			created_at, updated_at
+		FROM workout_sessions
+		WHERE id=$1
+	`, sessionID)
+
+	session, err := scanner.ScanWorkoutSession(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch session", err)
+		return
+	}
+
+	// Charger les sets associés
+	rows, err := database.DB.Query(ctx, `
+		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+		FROM set_results
+		WHERE session_id = $1
+		ORDER BY set_number ASC	
+		`, sessionID)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+		return
+	}
+	defer rows.Close()
+
+	var sets []model.SetResult
+	for rows.Next() {
+		set, err := scanner.ScanSetResult(rows)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+			return
+		}
+		sets = append(sets, *set)
+	}
+	session.Sets = sets
+
+	utils.Success(w, session)
+}
+
+// UnlikeWorkout retire un like à une session de travail
+func UnlikeWorkout(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Utiliser le système unifié de likes
+	err = utils.RemoveLike(ctx, user.ID, model.EntityTypeWorkout, sessionID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not remove like", err)
+		return
+	}
+
+	// Décrémenter le compteur de likes
+	_, err = database.DB.Exec(ctx, `
+		UPDATE workout_sessions SET likes = GREATEST(likes - 1, 0) WHERE id=$1`,
+		sessionID,
+	)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not decrement likes", err)
+		return
+	}
+
+	// Retourner le session mis à jour
+	row := database.DB.QueryRow(ctx, `
+		SELECT
+			id, program_id, user_id, start_time, end_time,
+			total_reps, total_duration, completed, notes,
+			COALESCE(likes, 0) as likes,
+			created_at, updated_at
+		FROM workout_sessions
+		WHERE id=$1
+	`, sessionID)
+
+	session, err := scanner.ScanWorkoutSession(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch session", err)
+		return
+	}
+
+	// Charger les sets associés
+	rows, err := database.DB.Query(ctx, `
+		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
+		FROM set_results
+		WHERE session_id = $1
+		ORDER BY set_number ASC
+		`, sessionID)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
+		return
+	}
+	defer rows.Close()
+
+	var sets []model.SetResult
+	for rows.Next() {
+		set, err := scanner.ScanSetResult(rows)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
+			return
+		}
+		sets = append(sets, *set)
+	}
+	session.Sets = sets
+
+	utils.Success(w, session)
+}

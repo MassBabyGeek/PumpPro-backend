@@ -67,6 +67,10 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/programs/{id}", handler.UpdateProgram).Methods(http.MethodPatch, http.MethodPut)
 	r.HandleFunc("/programs/{id}", handler.DeleteProgram).Methods(http.MethodDelete)
 
+	// Progeram interactions
+	authenticatedRoutes.HandleFunc("/programs/{id}/like", handler.LikeProgram).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/programs/{id}/like", handler.UnlikeProgram).Methods(http.MethodDelete)
+
 	// Program specific routes
 	r.HandleFunc("/programs/featured", handler.GetFeaturedPrograms).Methods(http.MethodGet)
 	r.HandleFunc("/programs/popular", handler.GetPopularPrograms).Methods(http.MethodGet)
@@ -85,6 +89,10 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/workouts/{id}", handler.GetWorkoutSession).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.UpdateWorkoutSession).Methods(http.MethodPatch)
 	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.DeleteWorkoutSession).Methods(http.MethodDelete)
+
+	// Workout sessions interactions
+	authenticatedRoutes.HandleFunc("//workouts/{id}/like", handler.LikeWorkout).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/workouts/{id}/like", handler.UnlikeWorkout).Methods(http.MethodDelete)
 
 	// User workout sessions
 	r.HandleFunc("/users/{userId}/workouts", handler.GetUsersWorkoutSessions).Methods(http.MethodGet)
@@ -118,12 +126,6 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/bug-reports/{id}", handler.GetBugReportById).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.UpdateBugReport).Methods(http.MethodPut, http.MethodPatch)
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.DeleteBugReport).Methods(http.MethodDelete)
-
-	// Likes system (générique)
-	authenticatedRoutes.HandleFunc("/likes/{entityType}/{entityId}/toggle", handler.ToggleLike).Methods(http.MethodPost)
-	r.HandleFunc("/likes/{entityType}/{entityId}", handler.GetLikeStatus).Methods(http.MethodGet)
-	r.HandleFunc("/likes/users/{userId}", handler.GetUserLikedEntities).Methods(http.MethodGet)
-	r.HandleFunc("/likes/top", handler.GetTopLiked).Methods(http.MethodGet)
 
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		utils.LogError("404 Not Found: %s %s", r.Method, r.URL.Path)

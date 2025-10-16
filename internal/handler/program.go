@@ -715,3 +715,106 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 
 	utils.Success(w, programs)
 }
+
+// LikeProgram ajoute un like à un programme
+func LikeProgram(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	programID := vars["id"]
+
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Utiliser le système unifié de likes
+	err = utils.AddLike(ctx, user.ID, model.EntityTypeProgram, programID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not add like", err)
+		return
+	}
+
+	// Incrémenter le compteur de likes
+	_, err = database.DB.Exec(ctx, `
+		UPDATE workout_programs SET likes = likes + 1 WHERE id=$1`,
+		programID,
+	)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not increment likes", err)
+		return
+	}
+
+	// Retourner le programme mis à jour
+	row := database.DB.QueryRow(ctx, `
+		SELECT
+			id, name, description, type, variant, difficulty, rest_between_sets,
+			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
+			reps_sequence, reps_per_minute, total_minutes,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
+			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+		FROM workout_programs
+		WHERE id=$1
+	`, programID)
+
+	program, err := scanner.ScanWorkoutProgram(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch program", err)
+		return
+	}
+
+	utils.Success(w, program)
+}
+
+// UnlikeProgram retire un like à un programme
+func UnlikeProgram(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	programID := vars["id"]
+
+	user, err := middleware.GetUserFromContext(r)
+	if err != nil {
+		utils.Error(w, http.StatusUnauthorized, "impossible de récupérer l'utilisateur", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Utiliser le système unifié de likes
+	err = utils.RemoveLike(ctx, user.ID, model.EntityTypeProgram, programID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not remove like", err)
+		return
+	}
+
+	// Décrémenter le compteur de likes
+	_, err = database.DB.Exec(ctx, `
+		UPDATE workout_programs SET likes = GREATEST(likes - 1, 0) WHERE id=$1`,
+		programID,
+	)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not decrement likes", err)
+		return
+	}
+
+	// Retourner le programme mis à jour
+	row := database.DB.QueryRow(ctx, `
+		SELECT
+			id, name, description, type, variant, difficulty, rest_between_sets,
+			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
+			reps_sequence, reps_per_minute, total_minutes,
+			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
+			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
+		FROM workout_programs
+		WHERE id=$1
+	`, programID)
+
+	program, err := scanner.ScanWorkoutProgram(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch program", err)
+		return
+	}
+	utils.Success(w, program)
+}
