@@ -454,18 +454,32 @@ func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Get optional authenticated user
+	user, _ := middleware.GetUserFromContext(r)
+	var authenticatedUserID *string
+	if user.ID != "" {
+		authenticatedUserID = &user.ID
+	}
+
 	sqlQuery := `
 		SELECT
 			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
 			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
 			COALESCE(ws.likes, 0) AS likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
 			ws.created_at, ws.updated_at
 		FROM workout_sessions ws
-		WHERE ws.user_id = $1
+		WHERE ws.user_id = $2
 	`
 
-	args := []interface{}{userID}
-	argCount := 2
+	args := []interface{}{authenticatedUserID, userID}
+	argCount := 3
 
 	if startDate != "" {
 		sqlQuery += " AND ws.start_time >= $" + strconv.Itoa(argCount)

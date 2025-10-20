@@ -48,7 +48,7 @@ type WorkoutSession struct {
 	Notes           *string     `json:"notes,omitempty"`
 	Sets            []SetResult `json:"sets"`
 	Likes           int         `json:"likes"`
-	UserLiked       bool        `json:"userLiked,omitempty"`
+	UserLiked       bool        `json:"userLiked"`
 
 	DateFields
 }
