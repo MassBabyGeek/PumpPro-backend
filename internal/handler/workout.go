@@ -754,13 +754,20 @@ func LikeWorkout(w http.ResponseWriter, r *http.Request) {
 	// Retourner le session mis à jour
 	row := database.DB.QueryRow(ctx, `
 		SELECT
-			id, program_id, user_id, start_time, end_time,
-			total_reps, total_duration, completed, notes,
-			COALESCE(likes, 0) as likes,
-			created_at, updated_at
-		FROM workout_sessions
-		WHERE id=$1
-	`, sessionID)
+			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
+			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) as likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
+			ws.created_at, ws.updated_at
+		FROM workout_sessions ws
+		WHERE ws.id = $2
+	`, user.ID, sessionID)
 
 	session, err := scanner.ScanWorkoutSession(row)
 	if err != nil {
@@ -805,9 +812,9 @@ func UnlikeWorkout(w http.ResponseWriter, r *http.Request) {
 	// Retourner le session mis à jour
 	row := database.DB.QueryRow(ctx, `
 		SELECT
-			id, program_id, user_id, start_time, end_time,
-			total_reps, total_duration, completed, notes,
-			COALESCE(likes, 0) as likes,
+			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
+			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) as likes,
 			COALESCE((
 				SELECT TRUE
 				FROM likes l
@@ -815,10 +822,10 @@ func UnlikeWorkout(w http.ResponseWriter, r *http.Request) {
 				AND l.entity_id = ws.id
 				AND l.user_id = $1
 			), FALSE) AS user_liked,
-			created_at, updated_at
-		FROM workout_sessions
-		WHERE id=$1
-	`, sessionID)
+			ws.created_at, ws.updated_at
+		FROM workout_sessions ws
+		WHERE ws.id = $2
+	`, user.ID, sessionID)
 
 	session, err := scanner.ScanWorkoutSession(row)
 	if err != nil {
