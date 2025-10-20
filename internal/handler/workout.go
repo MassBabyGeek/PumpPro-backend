@@ -781,31 +781,6 @@ func LikeWorkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les sets associés
-	rows, err := database.DB.Query(ctx, `
-		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-		FROM set_results
-		WHERE session_id = $1
-		ORDER BY set_number ASC	
-		`, sessionID)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-		return
-	}
-	defer rows.Close()
-
-	var sets []model.SetResult
-	for rows.Next() {
-		set, err := scanner.ScanSetResult(rows)
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-			return
-		}
-		sets = append(sets, *set)
-	}
-	session.Sets = sets
-
 	utils.Success(w, session)
 }
 
@@ -856,31 +831,6 @@ func UnlikeWorkout(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch session", err)
 		return
 	}
-
-	// Charger les sets associés
-	rows, err := database.DB.Query(ctx, `
-		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-		FROM set_results
-		WHERE session_id = $1
-		ORDER BY set_number ASC
-		`, sessionID)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-		return
-	}
-	defer rows.Close()
-
-	var sets []model.SetResult
-	for rows.Next() {
-		set, err := scanner.ScanSetResult(rows)
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-			return
-		}
-		sets = append(sets, *set)
-	}
-	session.Sets = sets
 
 	utils.Success(w, session)
 }
