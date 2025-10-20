@@ -91,7 +91,7 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/workouts/{id}", handler.DeleteWorkoutSession).Methods(http.MethodDelete)
 
 	// Workout sessions interactions
-	authenticatedRoutes.HandleFunc("//workouts/{id}/like", handler.LikeWorkout).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/workouts/{id}/like", handler.LikeWorkout).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/workouts/{id}/like", handler.UnlikeWorkout).Methods(http.MethodDelete)
 
 	// User workout sessions
