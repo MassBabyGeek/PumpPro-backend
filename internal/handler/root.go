@@ -61,6 +61,8 @@ func RootHandler(w http.ResponseWriter, r *http.Request) {
 				{"method": "GET", "path": "/programs/{id}", "description": "Récupérer un programme par ID"},
 				{"method": "POST", "path": "/programs", "description": "Créer un programme"},
 				{"method": "PUT", "path": "/programs/{id}", "description": "Mettre à jour un programme"},
+				{"method": "DELETE", "path": "/programs/{id}/like", "description": "Supprimer un like d'un programme"},
+				{"method": "POST", "path": "/programs/{id}/like", "description": "Ajouter un like à un programme"},
 				{"method": "DELETE", "path": "/programs/{id}", "description": "Supprimer un programme"},
 				{"method": "GET", "path": "/programs/featured", "description": "Programmes en vedette"},
 				{"method": "GET", "path": "/programs/popular", "description": "Programmes populaires"},
@@ -75,6 +77,8 @@ func RootHandler(w http.ResponseWriter, r *http.Request) {
 				{"method": "DELETE", "path": "/workouts/{id}", "description": "Supprimer une session"},
 				{"method": "POST", "path": "/workouts/{sessionId}/sets", "description": "Enregistrer les résultats des séries"},
 				{"method": "GET", "path": "/workouts/{sessionId}/sets", "description": "Récupérer les résultats des séries"},
+				{"method": "POST", "path": "/workouts/{id}/like", "description": "Ajouter un like à une session de travail"},
+				{"method": "DELETE", "path": "/workouts/{id}/like", "description": "Supprimer un like d'une session de travail"},
 			},
 			"leaderboard": []map[string]string{
 				{"method": "GET", "path": "/leaderboard", "description": "Classement général (params: period, limit)"},
