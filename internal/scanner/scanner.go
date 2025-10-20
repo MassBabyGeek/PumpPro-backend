@@ -156,7 +156,7 @@ func ScanWorkoutSession(scanner interface {
 	err := scanner.Scan(
 		&s.ID, &s.ProgramID, &s.UserID, &s.StartTime, &s.EndTime,
 		&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
-		&s.Likes,
+		&s.Likes, &s.UserLiked,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -379,7 +379,6 @@ func ScanUserChallengeTaskProgress(scanner interface {
 	return &progress, nil
 }
 
-
 // ScanBugReport scanne une ligne SQL vers un BugReport
 func ScanBugReport(scanner interface {
 	Scan(dest ...interface{}) error
@@ -422,7 +421,7 @@ func ScanLike(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.Like, error) {
 	var like model.Like
-	
+
 	err := scanner.Scan(
 		&like.ID, &like.UserID, &like.EntityType, &like.EntityID, &like.CreatedAt,
 	)

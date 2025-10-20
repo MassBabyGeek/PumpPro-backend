@@ -183,13 +183,20 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
 			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
 			COALESCE(ws.likes, 0) as likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
 			ws.created_at, ws.updated_at
 		FROM workout_sessions ws
 		WHERE 1=1
 	`
 
-	args := []interface{}{}
-	argCount := 1
+	args := []interface{}{userID}
+	argCount := 2
 
 	if startDate != "" {
 		sqlQuery += " AND ws.start_time >= $" + strconv.Itoa(argCount)
@@ -242,14 +249,6 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
-		}
-
-		// Populate UserLiked field if user is authenticated
-		if userID != nil {
-			likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeWorkout, session.ID)
-			if err == nil {
-				session.UserLiked = likeInfo.UserLiked
-			}
 		}
 
 		sessions = append(sessions, *session)
@@ -388,37 +387,31 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	var session model.WorkoutSession
-	err := database.DB.QueryRow(ctx, `
+	rows, err := database.DB.Query(ctx, `
 		SELECT
-			id, program_id, user_id, start_time, end_time,
-			total_reps, total_duration, completed, notes,
-			COALESCE(likes, 0) as likes,
-			created_at, updated_at
-		FROM workout_sessions
-		WHERE id = $1
-	`, sessionID).Scan(
-		&session.ID, &session.ProgramID, &session.UserID, &session.StartTime, &session.EndTime,
-		&session.TotalReps, &session.TotalDuration, &session.Completed, &session.Notes,
-		&session.Likes,
-		&session.CreatedAt, &session.UpdatedAt,
-	)
+			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
+			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) as likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
+			ws.created_at, ws.updated_at
+		FROM workout_sessions ws
+		WHERE ws.id = $2
+	`, userID, sessionID)
 
+	session, err := scanner.ScanWorkoutSession(rows)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "session not found", err)
 		return
 	}
 
-	// Populate UserLiked field if user is authenticated
-	if userID != nil {
-		likeInfo, err := utils.GetLikeInfo(ctx, userID, model.EntityTypeWorkout, session.ID)
-		if err == nil {
-			session.UserLiked = likeInfo.UserLiked
-		}
-	}
-
 	// Charger les sets associés
-	rows, err := database.DB.Query(ctx, `
+	rows, err = database.DB.Query(ctx, `
 		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
 		FROM set_results
 		WHERE session_id = $1
@@ -512,33 +505,27 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Récupérer la session mise à jour
-	var session model.WorkoutSession
-	err = database.DB.QueryRow(ctx, `
+	sessionRows, err := database.DB.Query(ctx, `
 		SELECT
-			id, program_id, user_id, start_time, end_time,
-			total_reps, total_duration, completed, notes,
-			COALESCE(likes, 0) as likes,
-			created_at, updated_at
-		FROM workout_sessions
-		WHERE id = $1
-	`, sessionID).Scan(
-		&session.ID, &session.ProgramID, &session.UserID, &session.StartTime, &session.EndTime,
-		&session.TotalReps, &session.TotalDuration, &session.Completed, &session.Notes,
-		&session.Likes,
-		&session.CreatedAt, &session.UpdatedAt,
-	)
+			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
+			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) as likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
+			ws.created_at, ws.updated_at
+		FROM workout_sessions ws
+		WHERE ws.id = $2
+	`, authenticatedUserID, sessionID)
 
+	session, err := scanner.ScanWorkoutSession(sessionRows)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not fetch updated session", err)
 		return
-	}
-
-	// Populate UserLiked field if user is authenticated
-	if authenticatedUserID != nil {
-		likeInfo, err := utils.GetLikeInfo(ctx, authenticatedUserID, model.EntityTypeWorkout, session.ID)
-		if err == nil {
-			session.UserLiked = likeInfo.UserLiked
-		}
 	}
 
 	// Charger les sets associés
@@ -821,6 +808,13 @@ func UnlikeWorkout(w http.ResponseWriter, r *http.Request) {
 			id, program_id, user_id, start_time, end_time,
 			total_reps, total_duration, completed, notes,
 			COALESCE(likes, 0) as likes,
+			COALESCE((
+				SELECT TRUE
+				FROM likes l
+				WHERE l.entity_type = 'workout'
+				AND l.entity_id = ws.id
+				AND l.user_id = $1
+			), FALSE) AS user_liked,
 			created_at, updated_at
 		FROM workout_sessions
 		WHERE id=$1
