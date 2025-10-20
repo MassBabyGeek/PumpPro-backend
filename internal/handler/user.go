@@ -458,6 +458,7 @@ func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 		SELECT
 			ws.id, ws.program_id, ws.user_id, ws.start_time, ws.end_time,
 			ws.total_reps, ws.total_duration, ws.completed, ws.notes,
+			COALESCE(ws.likes, 0) AS likes
 			ws.created_at, ws.updated_at
 		FROM workout_sessions ws
 		WHERE ws.user_id = $1
