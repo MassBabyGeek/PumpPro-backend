@@ -9,6 +9,43 @@ import (
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 )
 
+// FindUserByID recherche un utilisateur par son ID
+func FindUserByID(ctx context.Context, userID string) (*model.UserProfile, string, error) {
+	fmt.Printf("[INFO][FindUserByID] Recherche de l'utilisateur avec ID: %s\n", userID)
+
+	var user model.UserProfile
+	var passwordHash sql.NullString
+	var avatar, goal, provider sql.NullString
+	var age, score sql.NullInt64
+	var weight, height sql.NullFloat64
+
+	err := database.DB.QueryRow(ctx,
+		`SELECT id, name, email, avatar, age, weight, height, goal, score, provider, password_hash,
+		 join_date, created_at, updated_at
+		 FROM users WHERE id=$1 AND deleted_at IS NULL`,
+		userID,
+	).Scan(&user.ID, &user.Name, &user.Email, &avatar, &age, &weight, &height,
+		&goal, &score, &provider, &passwordHash, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	user.Avatar = NullStringToString(avatar)
+	user.Goal = NullStringToString(goal)
+	user.Provider = NullStringToString(provider)
+	if user.Provider == "" {
+		user.Provider = "email"
+	}
+	user.Age = NullInt64ToInt(age)
+	user.Weight = NullFloat64ToFloat64(weight)
+	user.Height = NullFloat64ToFloat64(height)
+	user.Score = NullInt64ToInt(score)
+
+	fmt.Printf("[INFO][FindUserByID] Utilisateur trouvé: %s (ID: %s)\n", user.Name, user.ID)
+	return &user, NullStringToString(passwordHash), nil
+}
+
 // FindUserByEmail recherche un utilisateur par son email
 func FindUserByEmail(ctx context.Context, email string) (*model.UserProfile, error) {
 	fmt.Printf("[INFO][FindUserByEmail] Recherche de l'utilisateur avec email: %s\n", email)

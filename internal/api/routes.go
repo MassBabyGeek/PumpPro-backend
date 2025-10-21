@@ -30,6 +30,7 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/auth/verify-email", handler.VerifyEmail).Methods(http.MethodPost)
 	r.HandleFunc("/auth/google", handler.GoogleAuth).Methods(http.MethodPost)
 	r.HandleFunc("/auth/apple", handler.AppleAuth).Methods(http.MethodPost)
+	r.HandleFunc("/auth/refresh", handler.RefreshToken).Methods(http.MethodPost)
 
 	// Users
 	r.HandleFunc("/users", handler.CreateUser).Methods(http.MethodPost)

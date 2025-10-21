@@ -53,17 +53,24 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Créer une session
+	// Créer un access token (1h) et un refresh token (30 jours)
 	ip, userAgent := utils.ExtractIPAndUserAgent(r)
-	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
+	accessToken, err := utils.CreateAccessToken(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'access token", err)
+		return
+	}
+
+	refreshToken, err := utils.CreateRefreshToken(ctx, user.ID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le refresh token", err)
 		return
 	}
 
 	utils.Success(w, map[string]interface{}{
-		"user":  user,
-		"token": token,
+		"user":         user,
+		"token":        accessToken,
+		"refreshToken": refreshToken,
 	})
 }
 
@@ -117,17 +124,24 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Créer une session pour l'auto-login
+	// Créer un access token (1h) et un refresh token (30 jours) pour l'auto-login
 	ip, userAgent := utils.ExtractIPAndUserAgent(r)
-	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
+	accessToken, err := utils.CreateAccessToken(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'access token", err)
+		return
+	}
+
+	refreshToken, err := utils.CreateRefreshToken(ctx, user.ID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le refresh token", err)
 		return
 	}
 
 	utils.Success(w, map[string]interface{}{
-		"user":  user,
-		"token": token,
+		"user":         user,
+		"token":        accessToken,
+		"refreshToken": refreshToken,
 	})
 }
 
@@ -281,17 +295,83 @@ func GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Créer une session
+	// Créer un access token (1h) et un refresh token (30 jours)
 	ip, userAgent := utils.ExtractIPAndUserAgent(r)
-	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
+	accessToken, err := utils.CreateAccessToken(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'access token", err)
+		return
+	}
+
+	refreshToken, err := utils.CreateRefreshToken(ctx, user.ID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le refresh token", err)
 		return
 	}
 
 	utils.Success(w, map[string]interface{}{
-		"user":  user,
-		"token": token,
+		"user":         user,
+		"token":        accessToken,
+		"refreshToken": refreshToken,
+	})
+}
+
+// RefreshToken génère un nouveau access token et refresh token à partir d'un refresh token valide
+func RefreshToken(w http.ResponseWriter, r *http.Request) {
+	// Récupérer le refresh token depuis le body
+	var payload struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	if err := utils.DecodeJSON(r, &payload); err != nil {
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
+		return
+	}
+
+	if payload.RefreshToken == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "refresh token manquant")
+		return
+	}
+
+	ctx := context.Background()
+
+	// Valider le refresh token et récupérer l'ID utilisateur
+	userID, err := utils.ValidateRefreshToken(ctx, payload.RefreshToken)
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "refresh token invalide ou expiré")
+		return
+	}
+
+	// Révoquer l'ancien refresh token (rotation)
+	if err := utils.RevokeRefreshToken(ctx, payload.RefreshToken); err != nil {
+		// Log l'erreur mais continue quand même
+		// (le token pourrait déjà être révoqué, ce qui n'est pas critique)
+	}
+
+	// Récupérer les informations de l'utilisateur
+	user, _, err := utils.FindUserByID(ctx, userID)
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "utilisateur introuvable")
+		return
+	}
+
+	// Créer un nouveau access token et refresh token
+	ip, userAgent := utils.ExtractIPAndUserAgent(r)
+	newAccessToken, err := utils.CreateAccessToken(ctx, userID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'access token", err)
+		return
+	}
+
+	newRefreshToken, err := utils.CreateRefreshToken(ctx, userID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le refresh token", err)
+		return
+	}
+
+	utils.Success(w, map[string]interface{}{
+		"user":         user,
+		"token":        newAccessToken,
+		"refreshToken": newRefreshToken,
 	})
 }
 
@@ -334,16 +414,23 @@ func AppleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Créer une session
+	// Créer un access token (1h) et un refresh token (30 jours)
 	ip, userAgent := utils.ExtractIPAndUserAgent(r)
-	token, err := utils.CreateSession(ctx, user.ID, ip, userAgent)
+	accessToken, err := utils.CreateAccessToken(ctx, user.ID, ip, userAgent)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer la session", err)
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer l'access token", err)
+		return
+	}
+
+	refreshToken, err := utils.CreateRefreshToken(ctx, user.ID, ip, userAgent)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le refresh token", err)
 		return
 	}
 
 	utils.Success(w, map[string]interface{}{
-		"user":  user,
-		"token": token,
+		"user":         user,
+		"token":        accessToken,
+		"refreshToken": refreshToken,
 	})
 }
