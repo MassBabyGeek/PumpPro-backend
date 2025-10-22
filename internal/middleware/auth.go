@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
@@ -79,6 +80,17 @@ func GetToken(r *http.Request) (string, error) {
 
 // validateTokenAndGetUser valide le token et retourne l'utilisateur associé
 func validateTokenAndGetUser(ctx context.Context, token string) (*model.UserProfile, error) {
+	// Créer un contexte avec timeout pour éviter les "context canceled" en prod
+	// Si le contexte parent est déjà annulé, on utilise context.Background()
+	queryCtx := ctx
+	if ctx.Err() != nil {
+		queryCtx = context.Background()
+	}
+
+	// Appliquer un timeout de 5 secondes pour la requête DB
+	queryCtx, cancel := context.WithTimeout(queryCtx, 5*time.Second)
+	defer cancel()
+
 	query := `
 	SELECT
 		u.id,
@@ -105,7 +117,7 @@ func validateTokenAndGetUser(ctx context.Context, token string) (*model.UserProf
 	LIMIT 1
 	`
 
-	row := database.DB.QueryRow(ctx, query, token)
+	row := database.DB.QueryRow(queryCtx, query, token)
 
 	user, err := scanner.ScanUserProfile(row)
 	if err != nil {
