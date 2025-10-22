@@ -39,6 +39,7 @@ func CreateRefreshToken(ctx context.Context, userID, ipAddress, userAgent string
 		userID, tokenHash, ipAddress, userAgent, expiresAt, now, userID,
 	).Scan(&refreshTokenID)
 
+	defer database.DB.Close()
 	if err != nil {
 		return "", fmt.Errorf("erreur lors de la création du refresh token: %w", err)
 	}
@@ -63,6 +64,7 @@ func ValidateRefreshToken(ctx context.Context, token string) (string, error) {
 		 WHERE token_hash=$1 AND deleted_at IS NULL`,
 		tokenHash,
 	).Scan(&userID, &expiresAt, &revokedAt)
+	defer database.DB.Close()
 
 	if err != nil {
 		return "", fmt.Errorf("refresh token invalide ou introuvable")
@@ -95,6 +97,8 @@ func RevokeRefreshToken(ctx context.Context, token string) error {
 		`SELECT user_id FROM refresh_tokens WHERE token_hash=$1 AND deleted_at IS NULL`,
 		tokenHash,
 	).Scan(&userID)
+
+	defer database.DB.Close()
 
 	if err != nil {
 		return fmt.Errorf("refresh token introuvable")
@@ -133,6 +137,7 @@ func RevokeAllUserRefreshTokens(ctx context.Context, userID string) error {
 		userID, now, now, userID,
 	)
 
+	defer database.DB.Close()
 	if err != nil {
 		return fmt.Errorf("erreur lors de la révocation: %w", err)
 	}
@@ -157,6 +162,7 @@ func CreateAccessToken(ctx context.Context, userID, ipAddress, userAgent string)
 		userID, token, ipAddress, userAgent, now, expiresAt, userID,
 	).Scan(&sessionID)
 
+	defer database.DB.Close()
 	if err != nil {
 		return "", err
 	}
