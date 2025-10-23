@@ -10,11 +10,13 @@ import (
 
 func SetupRouter() http.Handler {
 	r := mux.NewRouter()
+
+	// Logger middleware appliqué à TOUTES les routes
+	r.Use(middleware.LoggerMiddleware)
 	r.Use(middleware.OptionalAuth)
 
 	authenticatedRoutes := r.PathPrefix("/").Subrouter()
 	authenticatedRoutes.Use(middleware.AuthMiddleware)
-	authenticatedRoutes.Use(middleware.LoggerMiddleware)
 
 	// Root - API documentation
 	r.HandleFunc("/", handler.RootHandler).Methods(http.MethodGet)
