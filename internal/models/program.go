@@ -31,6 +31,8 @@ type WorkoutProgram struct {
 	Likes      int  `json:"likes"`
 	UserLiked  bool `json:"userLiked,omitempty"`
 
+	Creator *UserCreator `json:"creator,omitempty"`
+
 	DateFields
 }
 
@@ -49,6 +51,9 @@ type WorkoutSession struct {
 	Sets            []SetResult `json:"sets"`
 	Likes           int         `json:"likes"`
 	UserLiked       bool        `json:"userLiked"`
+
+	Creator *UserCreator `json:"creator,omitempty"`
+	User    *UserCreator `json:"user,omitempty"` // L'utilisateur qui a fait la session
 
 	DateFields
 }

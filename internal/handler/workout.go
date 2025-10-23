@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,114 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 )
+
+// validateWorkoutCompletion vérifie si les conditions du programme sont remplies
+func validateWorkoutCompletion(program *model.WorkoutProgram, session *model.WorkoutSession) bool {
+	switch program.Type {
+	case "TARGET_REPS":
+		// Vérifier si l'utilisateur a atteint le nombre de répétitions cible
+		if program.TargetReps != nil {
+			targetMet := session.TotalReps >= *program.TargetReps
+
+			// Si un temps limite est défini, vérifier qu'il est respecté
+			if program.TimeLimit != nil && targetMet {
+				return session.TotalDuration <= *program.TimeLimit
+			}
+			return targetMet
+		}
+		return false
+
+	case "MAX_TIME":
+		// Pour MAX_TIME, l'objectif est de faire un maximum de reps dans le temps imparti
+		// La session est "complétée" si la durée correspond au temps attendu (±5%)
+		if program.Duration != nil {
+			targetDuration := *program.Duration
+			tolerance := float64(targetDuration) * 0.05 // 5% de tolérance
+			return float64(session.TotalDuration) >= float64(targetDuration)-tolerance &&
+				float64(session.TotalDuration) <= float64(targetDuration)+tolerance
+		}
+		return false
+
+	case "SETS_REPS":
+		// Vérifier que le nombre de sets et reps par set sont atteints
+		if program.Sets != nil && program.RepsPerSet != nil {
+			expectedSets := *program.Sets
+			expectedRepsPerSet := *program.RepsPerSet
+
+			// Vérifier qu'on a le bon nombre de sets
+			if len(session.Sets) != expectedSets {
+				return false
+			}
+
+			// Vérifier que chaque set a le bon nombre de reps (avec tolérance de 90%)
+			for _, set := range session.Sets {
+				minReps := int(float64(expectedRepsPerSet) * 0.9)
+				if set.CompletedReps < minReps {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+
+	case "PYRAMID":
+		// Vérifier que la séquence de reps est respectée
+		if len(program.RepsSequence) > 0 {
+			if len(session.Sets) != len(program.RepsSequence) {
+				return false
+			}
+
+			// Vérifier que chaque set respecte la séquence (avec tolérance de 90%)
+			for i, set := range session.Sets {
+				expectedReps := program.RepsSequence[i]
+				minReps := int(float64(expectedReps) * 0.9)
+				if set.CompletedReps < minReps {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+
+	case "EMOM":
+		// Every Minute On the Minute - vérifier le nombre de minutes et reps/minute
+		if program.TotalMinutes != nil && program.RepsPerMinute != nil {
+			expectedMinutes := *program.TotalMinutes
+			expectedRepsPerMinute := *program.RepsPerMinute
+
+			// Vérifier la durée totale (±10% de tolérance)
+			expectedDuration := expectedMinutes * 60
+			tolerance := float64(expectedDuration) * 0.1
+			durationOk := float64(session.TotalDuration) >= float64(expectedDuration)-tolerance &&
+				float64(session.TotalDuration) <= float64(expectedDuration)+tolerance
+
+			// Vérifier le nombre total de reps
+			expectedTotalReps := expectedMinutes * expectedRepsPerMinute
+			repsOk := session.TotalReps >= int(float64(expectedTotalReps)*0.9)
+
+			return durationOk && repsOk
+		}
+		return false
+
+	case "AMRAP":
+		// As Many Reps As Possible - vérifier que la durée est respectée
+		if program.Duration != nil {
+			targetDuration := *program.Duration
+			tolerance := float64(targetDuration) * 0.05
+			return float64(session.TotalDuration) >= float64(targetDuration)-tolerance &&
+				float64(session.TotalDuration) <= float64(targetDuration)+tolerance
+		}
+		return false
+
+	case "FREE_MODE":
+		// En mode libre, la session est toujours considérée comme complétée
+		return true
+
+	default:
+		// Type inconnu, considérer comme non complété
+		return false
+	}
+}
 
 // SaveWorkoutSession enregistre une nouvelle session d'entraînement
 func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
@@ -31,21 +140,55 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Insérer la session
+	// Récupérer le programme pour valider la complétion
+	var program model.WorkoutProgram
+	var repsSequenceJSON []byte
+	err = database.DB.QueryRow(ctx, `
+		SELECT
+			id, name, type, variant, difficulty, rest_between_sets,
+			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
+			reps_sequence, reps_per_minute, total_minutes
+		FROM workout_programs
+		WHERE id=$1 AND deleted_at IS NULL
+	`, session.ProgramID).Scan(
+		&program.ID, &program.Name, &program.Type, &program.Variant,
+		&program.Difficulty, &program.RestBetweenSets,
+		&program.TargetReps, &program.TimeLimit, &program.Duration, &program.AllowRest,
+		&program.Sets, &program.RepsPerSet, &repsSequenceJSON, &program.RepsPerMinute,
+		&program.TotalMinutes,
+	)
+
+	if err != nil {
+		utils.Error(w, http.StatusNotFound, "workout program not found", err)
+		return
+	}
+
+	// Décoder la séquence de reps si présente
+	if repsSequenceJSON != nil {
+		json.Unmarshal(repsSequenceJSON, &program.RepsSequence)
+	}
+
+	// Valider si la session est complétée selon les critères du programme
+	isCompleted := validateWorkoutCompletion(&program, &session)
+
+	// Insérer la session avec le statut de complétion validé
 	err = database.DB.QueryRow(ctx, `
 		INSERT INTO workout_sessions(
 			program_id, user_id, start_time, end_time, total_reps, total_duration, completed, notes, created_at, created_by
-		) VALUES($1, $2, $3, NOW(), $4, $5, TRUE, $6, NOW(), $7)
+		) VALUES($1, $2, $3, NOW(), $4, $5, $6, $7, NOW(), $8)
 		RETURNING id, created_at, created_by
 	`,
 		session.ProgramID, user.ID, session.StartTime,
-		session.TotalReps, session.TotalDuration, session.Notes, user.ID,
+		session.TotalReps, session.TotalDuration, isCompleted, session.Notes, user.ID,
 	).Scan(&session.ID, &session.CreatedAt, &session.CreatedBy)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not save workout session", err)
 		return
 	}
+
+	// Mettre à jour le champ completed de la session pour le retour
+	session.Completed = isCompleted
 
 	// Si la session est liée à une tâche de challenge, mettre à jour la progression
 	if session.ChallengeID != nil && session.ChallengeTaskID != nil {
@@ -92,8 +235,8 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Ajouter les points au score de l'utilisateur seulement si la task n'était pas déjà complétée
-		if wasNotCompleted && taskScore > 0 {
+		// Ajouter les points au score de l'utilisateur seulement si la task n'était pas déjà complétée ET que la session est complétée
+		if wasNotCompleted && taskScore > 0 && isCompleted {
 			if err := utils.IncrementUserScore(ctx, user.ID, taskScore); err != nil {
 				// Log l'erreur mais ne pas bloquer la création de la session
 				utils.Error(w, http.StatusInternalServerError, "could not update user score for task", err)
@@ -131,29 +274,21 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Incrémenter le score de l'utilisateur si la session est complétée
-	if session.Completed {
-		// Récupérer la difficulté du programme pour calculer les points
-		var difficulty string
-		err := database.DB.QueryRow(ctx, `
-			SELECT difficulty FROM workout_programs WHERE id = $1
-		`, session.ProgramID).Scan(&difficulty)
+	if isCompleted {
+		// Points basés sur la difficulté: BEGINNER=5, INTERMEDIATE=10, ADVANCED=15
+		points := 5
+		switch program.Difficulty {
+		case "INTERMEDIATE":
+			points = 10
+		case "ADVANCED":
+			points = 15
+		}
 
-		if err == nil {
-			// Points basés sur la difficulté: BEGINNER=5, INTERMEDIATE=10, ADVANCED=15
-			points := 5
-			switch difficulty {
-			case "INTERMEDIATE":
-				points = 10
-			case "ADVANCED":
-				points = 15
-			}
-
-			// Incrémenter le score de l'utilisateur
-			if err := utils.IncrementUserScore(ctx, user.ID, points); err != nil {
-				// Log l'erreur mais ne pas bloquer la création de la session
-				utils.Error(w, http.StatusInternalServerError, "could not update user score", err)
-				return
-			}
+		// Incrémenter le score de l'utilisateur
+		if err := utils.IncrementUserScore(ctx, user.ID, points); err != nil {
+			// Log l'erreur mais ne pas bloquer la création de la session
+			utils.Error(w, http.StatusInternalServerError, "could not update user score", err)
+			return
 		}
 	}
 
@@ -250,6 +385,9 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
 		}
+
+		// Load creator and user information
+		utils.EnrichWorkoutSessionWithCreatorAndUser(ctx, session)
 
 		sessions = append(sessions, *session)
 	}
@@ -443,6 +581,9 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 	session.Sets = sets
 
+	// Load creator and user information
+	utils.EnrichWorkoutSessionWithCreatorAndUser(ctx, session)
+
 	utils.Success(w, session)
 }
 
@@ -560,6 +701,9 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		sets = append(sets, s)
 	}
 	session.Sets = sets
+
+	// Load creator and user information
+	utils.EnrichWorkoutSessionWithCreatorAndUser(ctx, session)
 
 	utils.Success(w, session)
 }

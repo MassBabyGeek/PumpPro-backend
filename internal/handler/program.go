@@ -105,6 +105,9 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Load creator information
+		utils.EnrichWorkoutProgramWithCreator(ctx, program)
+
 		programs = append(programs, *program)
 	}
 
@@ -149,6 +152,9 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 			program.UserLiked = likeInfo.UserLiked
 		}
 	}
+
+	// Load creator information
+	utils.EnrichWorkoutProgramWithCreator(ctx, program)
 
 	utils.Success(w, program)
 }
@@ -353,6 +359,9 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 			p.UserLiked = likeInfo.UserLiked
 		}
 
+		// Load creator information
+		utils.EnrichWorkoutProgramWithCreator(ctx, &p)
+
 		programs = append(programs, p)
 	}
 
@@ -418,6 +427,9 @@ func GetProgramsByDifficulty(w http.ResponseWriter, r *http.Request) {
 				p.UserLiked = likeInfo.UserLiked
 			}
 		}
+
+		// Load creator information
+		utils.EnrichWorkoutProgramWithCreator(ctx, &p)
 
 		programs = append(programs, p)
 	}
@@ -638,6 +650,9 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Load creator information
+		utils.EnrichWorkoutProgramWithCreator(ctx, &p)
+
 		programs = append(programs, p)
 	}
 
@@ -709,6 +724,9 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 				p.UserLiked = likeInfo.UserLiked
 			}
 		}
+
+		// Load creator information
+		utils.EnrichWorkoutProgramWithCreator(ctx, &p)
 
 		programs = append(programs, p)
 	}

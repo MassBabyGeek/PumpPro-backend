@@ -35,3 +35,10 @@ type ChartData struct {
 	Duration int     `json:"duration"`
 	Calories float64 `json:"calories"`
 }
+
+// UserCreator contient les informations de l'utilisateur créateur d'une entité
+type UserCreator struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
+}

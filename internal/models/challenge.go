@@ -34,6 +34,9 @@ type Challenge struct {
 	Tags             []string        `json:"tags,omitempty"`
 	IsOfficial       bool            `json:"isOfficial"`
 	Tasks            []ChallengeTask `json:"challengeTasks,omitempty"`
+
+	Creator *UserCreator `json:"creator,omitempty"`
+
 	DateFields
 }
 
@@ -53,6 +56,9 @@ type ChallengeTask struct {
 	IsLocked      bool                       `json:"isLocked"`
 	Score         *int                       `json:"score,omitempty"`
 	UserProgress  *UserChallengeTaskProgress `json:"userProgress,omitempty"`
+
+	Creator *UserCreator `json:"creator,omitempty"`
+
 	DateFields
 }
 

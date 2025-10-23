@@ -75,6 +75,9 @@ func loadChallengeTasks(ctx context.Context, challengeID string, userID *string)
 			}
 		}
 
+		// Load creator information
+		utils.EnrichChallengeTaskWithCreator(ctx, task)
+
 		tasks = append(tasks, *task)
 	}
 
@@ -126,6 +129,9 @@ func loadChallengeTask(ctx context.Context, challengeTaskId string, userID *stri
 			task.UserProgress = progress
 		}
 	}
+
+	// Load creator information
+	utils.EnrichChallengeTaskWithCreator(ctx, task)
 
 	return task, nil
 }
@@ -271,6 +277,9 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 			challenge.OverallProgress = calculateOverallProgress(tasks)
 		}
 
+		// Load creator information
+		utils.EnrichChallengeWithCreator(ctx, challenge)
+
 		challenges = append(challenges, *challenge)
 	}
 
@@ -370,6 +379,9 @@ func GetChallengeById(w http.ResponseWriter, r *http.Request) {
 	if userID != nil {
 		challenge.OverallProgress = calculateOverallProgress(tasks)
 	}
+
+	// Load creator information
+	utils.EnrichChallengeWithCreator(ctx, challenge)
 
 	utils.Success(w, challenge)
 }
@@ -813,6 +825,9 @@ func GetUserActiveChallenges(w http.ResponseWriter, r *http.Request) {
 		}
 		challenge.Tasks = tasks
 
+		// Load creator information
+		utils.EnrichChallengeWithCreator(ctx, challenge)
+
 		challenges = append(challenges, *challenge)
 	}
 
@@ -869,6 +884,9 @@ func GetUserCompletedChallenges(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		challenge.Tasks = tasks
+
+		// Load creator information
+		utils.EnrichChallengeWithCreator(ctx, challenge)
 
 		challenges = append(challenges, *challenge)
 	}
