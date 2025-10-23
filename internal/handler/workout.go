@@ -404,7 +404,13 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		WHERE ws.id = $2
 	`, userID, sessionID)
 
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query workout session", err)
+		return
+	}
+
 	session, err := scanner.ScanWorkoutSession(rows)
+	rows.Close() // Fermer immédiatement après le scan
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "session not found", err)
 		return
