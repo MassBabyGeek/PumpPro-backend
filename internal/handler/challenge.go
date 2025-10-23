@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/logger"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
@@ -905,7 +906,7 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("[INFO][CompleteTask] User: %s, Task: %s\n", user.ID, taskID)
+	logger.Info("CompleteTask: User=%s, Task=%s", user.ID, taskID)
 
 	ctx := context.Background()
 	task, err := loadChallengeTask(ctx, taskID, &user.ID)
@@ -924,7 +925,7 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 	`, user.ID, task.ChallengeID).Scan(&isFirstTask)
 
 	if err != nil {
-		fmt.Printf("[ERROR] Could not check if first task: %v\n", err)
+		logger.Error("Could not check if first task: %v", err)
 		isFirstTask = false
 	}
 
@@ -950,7 +951,7 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 		`, task.ChallengeID)
 
 		if err != nil {
-			fmt.Printf("[ERROR] Could not increment participants for challenge %s: %v\n", task.ChallengeID, err)
+			logger.Error("Could not increment participants for challenge %s: %v", task.ChallengeID, err)
 		}
 	}
 
@@ -989,7 +990,7 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 			`, task.ChallengeID)
 
 			if err != nil {
-				fmt.Printf("[ERROR] Could not increment completions for challenge %s: %v\n", task.ChallengeID, err)
+				logger.Error("Could not increment completions for challenge %s: %v", task.ChallengeID, err)
 			}
 
 			// Mettre à jour la progression de l'utilisateur à 100%
@@ -1004,7 +1005,7 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 			`, task.ChallengeID, user.ID)
 
 			if err != nil {
-				fmt.Printf("[ERROR] Could not update user challenge progress: %v\n", err)
+				logger.Error("Could not update user challenge progress: %v", err)
 			}
 		}
 	}

@@ -1,25 +1,29 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/api"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/config"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/logger"
 )
 
 func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("could not load config: %v", err)
+		logger.Error("Could not load config: %v", err)
+		os.Exit(1)
 	}
 
 	// Connect to PostgreSQL
 	db, err := database.ConnectPostgres(cfg)
 	if err != nil {
-		log.Fatalf("database connection failed: %v", err)
+		logger.Error("Database connection failed: %v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -27,8 +31,10 @@ func main() {
 	router := api.SetupRouter()
 
 	// Start server
-	log.Printf("Starting server on port %s...", cfg.Port)
+	logger.Success("Server starting on port %s", cfg.Port)
+	fmt.Printf("\n")
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
-		log.Fatalf("server failed: %v", err)
+		logger.Error("Server failed: %v", err)
+		os.Exit(1)
 	}
 }

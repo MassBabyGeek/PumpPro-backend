@@ -3,10 +3,10 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/config"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -44,7 +44,7 @@ func ConnectPostgres(cfg *config.Config) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	log.Println("✅ Connected to PostgreSQL successfully")
+	logger.Success("Connected to PostgreSQL (pool: %d-%d conns)", poolConfig.MinConns, poolConfig.MaxConns)
 
 	DB = pool
 

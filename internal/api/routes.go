@@ -5,8 +5,6 @@ import (
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/handler"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
-	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
-	"github.com/fatih/color"
 	"github.com/gorilla/mux"
 )
 
@@ -129,8 +127,6 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.DeleteBugReport).Methods(http.MethodDelete)
 
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		utils.LogError("404 Not Found: %s %s", r.Method, r.URL.Path)
-		color.Yellow("[404] %s %s (route non trouvée)", r.Method, r.URL.Path)
 		http.Error(w, "Route not found", http.StatusNotFound)
 	})
 

@@ -15,7 +15,6 @@ const SessionDuration = 24 * time.Hour
 
 // CreateSession crée une nouvelle session pour un utilisateur
 func CreateSession(ctx context.Context, userID, ipAddress, userAgent string) (string, error) {
-	fmt.Printf("[INFO][CreateSession] Création d'une session pour l'utilisateur: %s\n", userID)
 
 	token := uuid.NewString()
 	now := time.Now()
@@ -32,13 +31,11 @@ func CreateSession(ctx context.Context, userID, ipAddress, userAgent string) (st
 		return "", err
 	}
 
-	fmt.Printf("[INFO][CreateSession] Session créée avec succès: ID=%s, Token=%s\n", sessionID, token)
 	return token, nil
 }
 
 // InvalidateSession invalide une session (soft delete)
 func InvalidateSession(ctx context.Context, token string) error {
-	fmt.Printf("[INFO][InvalidateSession] Invalidation de la session avec token: %s\n", token)
 
 	// Récupérer l'ID de l'utilisateur
 	var userID string
@@ -67,7 +64,6 @@ func InvalidateSession(ctx context.Context, token string) error {
 		return fmt.Errorf("aucune session invalide")
 	}
 
-	fmt.Printf("[INFO][InvalidateSession] Session invalidée avec succès\n")
 	return nil
 }
 
@@ -75,6 +71,5 @@ func InvalidateSession(ctx context.Context, token string) error {
 func ExtractIPAndUserAgent(r *http.Request) (string, string) {
 	ip := r.RemoteAddr
 	userAgent := r.UserAgent()
-	fmt.Printf("[INFO][ExtractIPAndUserAgent] IP=%s, UserAgent=%s\n", ip, userAgent)
 	return ip, userAgent
 }

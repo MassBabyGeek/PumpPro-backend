@@ -3,7 +3,6 @@ package utils
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
@@ -11,7 +10,6 @@ import (
 
 // FindUserByID recherche un utilisateur par son ID
 func FindUserByID(ctx context.Context, userID string) (*model.UserProfile, string, error) {
-	fmt.Printf("[INFO][FindUserByID] Recherche de l'utilisateur avec ID: %s\n", userID)
 
 	var user model.UserProfile
 	var passwordHash sql.NullString
@@ -42,13 +40,11 @@ func FindUserByID(ctx context.Context, userID string) (*model.UserProfile, strin
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
 
-	fmt.Printf("[INFO][FindUserByID] Utilisateur trouvé: %s (ID: %s)\n", user.Name, user.ID)
 	return &user, NullStringToString(passwordHash), nil
 }
 
 // FindUserByEmail recherche un utilisateur par son email
 func FindUserByEmail(ctx context.Context, email string) (*model.UserProfile, error) {
-	fmt.Printf("[INFO][FindUserByEmail] Recherche de l'utilisateur avec email: %s\n", email)
 
 	var user model.UserProfile
 	var avatar, goal, provider sql.NullString
@@ -78,13 +74,11 @@ func FindUserByEmail(ctx context.Context, email string) (*model.UserProfile, err
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
 
-	fmt.Printf("[INFO][FindUserByEmail] Utilisateur trouvé: %s (ID: %s)\n", user.Name, user.ID)
 	return &user, nil
 }
 
 // FindUserByEmailWithPassword recherche un utilisateur par email et retourne aussi le hash du mot de passe
 func FindUserByEmailWithPassword(ctx context.Context, email string) (*model.UserProfile, string, error) {
-	fmt.Printf("[INFO][FindUserByEmailWithPassword] Recherche de l'utilisateur avec email: %s\n", email)
 
 	var user model.UserProfile
 	var passwordHash string
@@ -111,13 +105,11 @@ func FindUserByEmailWithPassword(ctx context.Context, email string) (*model.User
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
 
-	fmt.Printf("[INFO][FindUserByEmailWithPassword] Utilisateur trouvé: %s (ID: %s)\n", user.Name, user.ID)
 	return &user, passwordHash, nil
 }
 
 // CreateUser crée un nouvel utilisateur
 func CreateUser(ctx context.Context, name, email, passwordHash, avatar, provider string) (*model.UserProfile, error) {
-	fmt.Printf("[INFO][CreateUser] Création de l'utilisateur: %s (%s) via %s\n", name, email, provider)
 
 	var user model.UserProfile
 	err := database.DB.QueryRow(ctx,
@@ -136,22 +128,18 @@ func CreateUser(ctx context.Context, name, email, passwordHash, avatar, provider
 	_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
 
 	user.Provider = provider
-	fmt.Printf("[INFO][CreateUser] Utilisateur créé avec succès: ID=%s\n", user.ID)
 	return &user, nil
 }
 
 // FindOrCreateOAuthUser trouve ou crée un utilisateur OAuth
 func FindOrCreateOAuthUser(ctx context.Context, email, name, avatar, provider string) (*model.UserProfile, error) {
-	fmt.Printf("[INFO][FindOrCreateOAuthUser] Tentative de connexion/création via %s pour %s\n", provider, email)
 
 	// Essayer de trouver l'utilisateur
 	user, err := FindUserByEmail(ctx, email)
 	if err == nil {
-		fmt.Printf("[INFO][FindOrCreateOAuthUser] Utilisateur existant trouvé\n")
 		return user, nil
 	}
 
 	// Créer l'utilisateur s'il n'existe pas
-	fmt.Printf("[INFO][FindOrCreateOAuthUser] Création d'un nouvel utilisateur\n")
 	return CreateUser(ctx, name, email, "", avatar, provider)
 }

@@ -121,7 +121,7 @@ func validateTokenAndGetUser(ctx context.Context, token string) (*model.UserProf
 
 	user, err := scanner.ScanUserProfile(row)
 	if err != nil {
-		fmt.Printf("[INFO][validateTokenAndGetUser] Erreur de scan: %v\n", err)
+		// Ne pas logger ici, l'erreur sera loggée par le middleware ou le handler
 		return nil, err
 	}
 

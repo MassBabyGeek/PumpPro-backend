@@ -19,7 +19,6 @@ const AccessTokenDuration = 1 * time.Hour
 
 // CreateRefreshToken crée un nouveau refresh token pour un utilisateur
 func CreateRefreshToken(ctx context.Context, userID, ipAddress, userAgent string) (string, error) {
-	fmt.Printf("[INFO][CreateRefreshToken] Création d'un refresh token pour l'utilisateur: %s\n", userID)
 
 	// Générer un token unique
 	token := uuid.NewString()
@@ -43,13 +42,11 @@ func CreateRefreshToken(ctx context.Context, userID, ipAddress, userAgent string
 		return "", fmt.Errorf("erreur lors de la création du refresh token: %w", err)
 	}
 
-	fmt.Printf("[INFO][CreateRefreshToken] Refresh token créé avec succès: ID=%s\n", refreshTokenID)
 	return token, nil
 }
 
 // ValidateRefreshToken valide un refresh token et retourne l'ID utilisateur
 func ValidateRefreshToken(ctx context.Context, token string) (string, error) {
-	fmt.Printf("[INFO][ValidateRefreshToken] Validation du refresh token\n")
 
 	tokenHash := hashToken(token)
 
@@ -78,13 +75,11 @@ func ValidateRefreshToken(ctx context.Context, token string) (string, error) {
 		return "", fmt.Errorf("refresh token expiré")
 	}
 
-	fmt.Printf("[INFO][ValidateRefreshToken] Refresh token valide pour l'utilisateur: %s\n", userID)
 	return userID, nil
 }
 
 // RevokeRefreshToken révoque un refresh token
 func RevokeRefreshToken(ctx context.Context, token string) error {
-	fmt.Printf("[INFO][RevokeRefreshToken] Révocation du refresh token\n")
 
 	tokenHash := hashToken(token)
 	now := time.Now()
@@ -117,17 +112,15 @@ func RevokeRefreshToken(ctx context.Context, token string) error {
 		return fmt.Errorf("refresh token déjà révoqué ou introuvable")
 	}
 
-	fmt.Printf("[INFO][RevokeRefreshToken] Refresh token révoqué avec succès\n")
 	return nil
 }
 
 // RevokeAllUserRefreshTokens révoque tous les refresh tokens d'un utilisateur
 func RevokeAllUserRefreshTokens(ctx context.Context, userID string) error {
-	fmt.Printf("[INFO][RevokeAllUserRefreshTokens] Révocation de tous les refresh tokens pour l'utilisateur: %s\n", userID)
 
 	now := time.Now()
 
-	res, err := database.DB.Exec(ctx,
+	_, err := database.DB.Exec(ctx,
 		`UPDATE refresh_tokens
 		 SET revoked_at=$2, updated_at=$3, updated_by=$4
 		 WHERE user_id=$1 AND deleted_at IS NULL AND revoked_at IS NULL`,
@@ -138,13 +131,11 @@ func RevokeAllUserRefreshTokens(ctx context.Context, userID string) error {
 		return fmt.Errorf("erreur lors de la révocation: %w", err)
 	}
 
-	fmt.Printf("[INFO][RevokeAllUserRefreshTokens] %d refresh tokens révoqués\n", res.RowsAffected())
 	return nil
 }
 
 // CreateAccessToken crée un access token avec une durée de vie de 1h
 func CreateAccessToken(ctx context.Context, userID, ipAddress, userAgent string) (string, error) {
-	fmt.Printf("[INFO][CreateAccessToken] Création d'un access token pour l'utilisateur: %s\n", userID)
 
 	token := uuid.NewString()
 	now := time.Now()
@@ -162,7 +153,6 @@ func CreateAccessToken(ctx context.Context, userID, ipAddress, userAgent string)
 		return "", err
 	}
 
-	fmt.Printf("[INFO][CreateAccessToken] Access token créé avec succès: ID=%s, Token=%s\n", sessionID, token)
 	return token, nil
 }
 

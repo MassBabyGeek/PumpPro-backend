@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
+
+	"github.com/MassBabyGeek/PumpPro-backend/internal/logger"
 )
 
 type APIResponse struct {
@@ -20,28 +21,27 @@ func JSON(w http.ResponseWriter, status int, payload interface{}) {
 	json.NewEncoder(w).Encode(payload)
 }
 
-// Success affiche le type et la valeur de data dans la console
+// Success retourne un succès HTTP 200 (n'affiche plus les objets JSON)
 func Success(w http.ResponseWriter, data interface{}) {
-	fmt.Printf("[INFO][Success] Type: %s, Value: %#v\n", reflect.TypeOf(data), data)
 	JSON(w, http.StatusOK, APIResponse{Success: true, Data: data})
 }
 
-// Error gère les erreurs HTTP avec logging automatique
+// Error gère les erreurs HTTP avec logging via le logger unifié
 func Error(w http.ResponseWriter, status int, message string, err error) {
 	errMsg := message
 	if err != nil {
 		errMsg = fmt.Sprintf("%s: %v", message, err)
 	}
-	fmt.Printf("[ERROR][%d] %s\n", status, errMsg)
+	logger.Error("[%d] %s", status, errMsg)
 	JSON(w, status, APIResponse{Success: false, Error: errMsg})
 }
 
-// ErrorSimple pour les erreurs sans objet error (rétrocompatibilité)
+// ErrorSimple pour les erreurs sans objet error
 func ErrorSimple(w http.ResponseWriter, status int, message string) {
 	Error(w, status, message, nil)
 }
 
+// Message retourne un message de succès
 func Message(w http.ResponseWriter, msg string) {
-	fmt.Printf("[INFO][MESSAGE] %s\n", msg)
 	JSON(w, http.StatusOK, APIResponse{Success: true, Message: msg})
 }
