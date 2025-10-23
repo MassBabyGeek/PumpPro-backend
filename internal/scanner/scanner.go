@@ -165,6 +165,47 @@ func ScanWorkoutSession(scanner interface {
 	return &s, nil
 }
 
+// ScanWorkoutSessionWithCreatorAndUser scanne une WorkoutSession avec les infos du créateur et de l'utilisateur
+func ScanWorkoutSessionWithCreatorAndUser(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.WorkoutSession, error) {
+	var s model.WorkoutSession
+	var creatorID, creatorName, creatorAvatar sql.NullString
+	var userID, userName, userAvatar sql.NullString
+
+	err := scanner.Scan(
+		&s.ID, &s.ProgramID, &s.UserID, &s.StartTime, &s.EndTime,
+		&s.TotalReps, &s.TotalDuration, &s.Completed, &s.Notes,
+		&s.Likes, &s.UserLiked,
+		&s.CreatedAt, &s.UpdatedAt,
+		&creatorID, &creatorName, &creatorAvatar,
+		&userID, &userName, &userAvatar,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Créer l'objet Creator si les données existent
+	if creatorID.Valid && creatorName.Valid {
+		s.Creator = &model.UserCreator{
+			ID:     creatorID.String,
+			Name:   creatorName.String,
+			Avatar: utils.NullStringToString(creatorAvatar),
+		}
+	}
+
+	// Créer l'objet User si les données existent
+	if userID.Valid && userName.Valid {
+		s.User = &model.UserCreator{
+			ID:     userID.String,
+			Name:   userName.String,
+			Avatar: utils.NullStringToString(userAvatar),
+		}
+	}
+
+	return &s, nil
+}
+
 // ScanSetResult scanne une ligne SQL vers un SetResult
 func ScanSetResult(scanner interface {
 	Scan(dest ...interface{}) error

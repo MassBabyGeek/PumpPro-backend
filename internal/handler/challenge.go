@@ -914,14 +914,99 @@ func CompleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vérifier si c'est la première task que l'utilisateur complète pour ce challenge
+	var isFirstTask bool
+	err = database.DB.QueryRow(ctx, `
+		SELECT NOT EXISTS(
+			SELECT 1 FROM user_challenge_task_progress
+			WHERE user_id = $1 AND challenge_id = $2
+		)
+	`, user.ID, task.ChallengeID).Scan(&isFirstTask)
+
+	if err != nil {
+		fmt.Printf("[ERROR] Could not check if first task: %v\n", err)
+		isFirstTask = false
+	}
+
 	_, err = database.DB.Exec(ctx, `
 		INSERT INTO user_challenge_task_progress(user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at)
 		VALUES($1, $2, $3, true, NOW(), $4, 1, NOW(), NOW())
-		RETURNING id, user_id, task_id, challenge_id, completed, completed_at, score, attempts, created_at, updated_at
+		ON CONFLICT (user_id, task_id)
+		DO UPDATE SET
+			completed = true,
+			completed_at = NOW(),
+			attempts = user_challenge_task_progress.attempts + 1,
+			updated_at = NOW()
 	`, user.ID, task.ID, task.ChallengeID, task.Score)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not create progress", err)
 		return
+	}
+
+	// Si c'est la première task de ce challenge pour cet utilisateur, incrémenter participants
+	if isFirstTask {
+		_, err = database.DB.Exec(ctx, `
+			UPDATE challenges SET participants = participants + 1 WHERE id = $1
+		`, task.ChallengeID)
+
+		if err != nil {
+			fmt.Printf("[ERROR] Could not increment participants for challenge %s: %v\n", task.ChallengeID, err)
+		}
+	}
+
+	// Vérifier si toutes les tasks du challenge sont complétées par cet utilisateur
+	var totalTasks, completedTasks int
+	err = database.DB.QueryRow(ctx, `
+		SELECT
+			COUNT(*) as total_tasks,
+			COUNT(uctp.id) FILTER (WHERE uctp.completed = true) as completed_tasks
+		FROM challenge_tasks ct
+		LEFT JOIN user_challenge_task_progress uctp
+			ON ct.id = uctp.task_id AND uctp.user_id = $1
+		WHERE ct.challenge_id = $2 AND ct.deleted_at IS NULL
+	`, user.ID, task.ChallengeID).Scan(&totalTasks, &completedTasks)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not check challenge completion", err)
+		return
+	}
+
+	// Si toutes les tasks sont complétées, incrémenter les completions
+	if totalTasks > 0 && completedTasks == totalTasks {
+		// Vérifier si on n'a pas déjà incrémenté les completions pour cet utilisateur
+		var alreadyCounted bool
+		err = database.DB.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM user_challenge_progress
+				WHERE challenge_id = $1 AND user_id = $2 AND progress = 100
+			)
+		`, task.ChallengeID, user.ID).Scan(&alreadyCounted)
+
+		if err == nil && !alreadyCounted {
+			// Incrémenter les completions du challenge
+			_, err = database.DB.Exec(ctx, `
+				UPDATE challenges SET completions = completions + 1 WHERE id = $1
+			`, task.ChallengeID)
+
+			if err != nil {
+				fmt.Printf("[ERROR] Could not increment completions for challenge %s: %v\n", task.ChallengeID, err)
+			}
+
+			// Mettre à jour la progression de l'utilisateur à 100%
+			_, err = database.DB.Exec(ctx, `
+				INSERT INTO user_challenge_progress(challenge_id, user_id, progress, current_reps, target_reps, attempts, completed_at, created_at, updated_at)
+				VALUES($1, $2, 100, 0, 0, 1, NOW(), NOW(), NOW())
+				ON CONFLICT (challenge_id, user_id)
+				DO UPDATE SET
+					progress = 100,
+					completed_at = NOW(),
+					updated_at = NOW()
+			`, task.ChallengeID, user.ID)
+
+			if err != nil {
+				fmt.Printf("[ERROR] Could not update user challenge progress: %v\n", err)
+			}
+		}
 	}
 
 	utils.Success(w, task)
