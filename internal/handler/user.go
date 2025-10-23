@@ -473,8 +473,12 @@ func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 				AND l.entity_id = ws.id
 				AND l.user_id = $1
 			), FALSE) AS user_liked,
-			ws.created_at, ws.updated_at
+			ws.created_at, ws.updated_at,
+			creator.id as creator_id, creator.name as creator_name, creator.avatar as creator_avatar,
+			u.id as user_id, u.name as user_name, u.avatar as user_avatar
 		FROM workout_sessions ws
+		LEFT JOIN users creator ON ws.created_by = creator.id AND creator.deleted_at IS NULL
+		LEFT JOIN users u ON ws.user_id = u.id AND u.deleted_at IS NULL
 		WHERE ws.user_id = $2
 	`
 
@@ -528,7 +532,7 @@ func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	var sessions []model.WorkoutSession
 	for rows.Next() {
-		session, err := scanner.ScanWorkoutSession(rows)
+		session, err := scanner.ScanWorkoutSessionWithCreatorAndUser(rows)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan session row", err)
 			return
