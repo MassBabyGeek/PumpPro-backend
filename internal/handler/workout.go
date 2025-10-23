@@ -359,12 +359,16 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	sqlQuery += " ORDER BY ws.start_time DESC"
 
+	// Pagination
 	if limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil {
 			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
 			args = append(args, limit)
 			argCount++
 		}
+	} else {
+		// Limite par défaut de 50 pour éviter de retourner trop de données
+		sqlQuery += " LIMIT 50"
 	}
 
 	if offsetStr != "" {

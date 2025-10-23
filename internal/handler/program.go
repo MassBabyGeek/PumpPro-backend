@@ -32,6 +32,8 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 	variant := query.Get("variant")
 	isCustomStr := query.Get("isCustom")
 	searchQuery := query.Get("searchQuery")
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
 
 	sqlQuery := `
 		SELECT
@@ -83,6 +85,26 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sqlQuery += " ORDER BY is_featured DESC, usage_count DESC, created_at DESC"
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 50 pour éviter de retourner trop de données
+		sqlQuery += " LIMIT 50"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 	if err != nil {
@@ -310,9 +332,11 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Pour l'instant, on retourne les programmes les plus populaires de niveau intermédiaire
-	// En production, cela devrait être basé sur l'historique et le niveau de l'utilisateur
-	rows, err := database.DB.Query(ctx, `
+	query := r.URL.Query()
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	sqlQuery := `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
@@ -322,8 +346,34 @@ func GetRecommendedPrograms(w http.ResponseWriter, r *http.Request) {
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND difficulty='INTERMEDIATE'
 		ORDER BY usage_count DESC, is_featured DESC
-		LIMIT 5
-	`)
+	`
+
+	args := []interface{}{}
+	argCount := 1
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 20 pour les recommandations
+		sqlQuery += " LIMIT 20"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
+
+	// Pour l'instant, on retourne les programmes les plus populaires de niveau intermédiaire
+	// En production, cela devrait être basé sur l'historique et le niveau de l'utilisateur
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
@@ -442,7 +492,11 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	rows, err := database.DB.Query(ctx, `
+	query := r.URL.Query()
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	sqlQuery := `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
@@ -452,7 +506,32 @@ func GetUserCustomPrograms(w http.ResponseWriter, r *http.Request) {
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND is_custom=true AND created_by=$1
 		ORDER BY updated_at DESC
-	`, userID)
+	`
+
+	args := []interface{}{userID}
+	argCount := 2
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 50 pour éviter de retourner trop de données
+		sqlQuery += " LIMIT 50"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
+
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
@@ -601,7 +680,11 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	rows, err := database.DB.Query(ctx, `
+	query := r.URL.Query()
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	sqlQuery := `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
@@ -611,8 +694,32 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 		FROM workout_programs
 		WHERE deleted_at IS NULL AND is_featured=true
 		ORDER BY usage_count DESC
-		LIMIT 6
-	`)
+	`
+
+	args := []interface{}{}
+	argCount := 1
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 20 pour les programmes featured
+		sqlQuery += " LIMIT 20"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
+
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)
@@ -661,13 +768,9 @@ func GetFeaturedPrograms(w http.ResponseWriter, r *http.Request) {
 func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 10
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
+	query := r.URL.Query()
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
 
 	// Get optional authenticated user
 	user, _ := middleware.GetUserFromContext(r)
@@ -676,7 +779,7 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	rows, err := database.DB.Query(ctx, `
+	sqlQuery := `
 		SELECT
 			id, name, description, type, variant, difficulty, rest_between_sets,
 			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
@@ -686,8 +789,32 @@ func GetPopularPrograms(w http.ResponseWriter, r *http.Request) {
 		FROM workout_programs
 		WHERE deleted_at IS NULL
 		ORDER BY usage_count DESC
-		LIMIT $1
-	`, limit)
+	`
+
+	args := []interface{}{}
+	argCount := 1
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 20 pour les programmes populaires
+		sqlQuery += " LIMIT 20"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
+	}
+
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
 
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not query programs", err)

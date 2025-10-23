@@ -159,6 +159,8 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 
 	searchQuery := query.Get("searchQuery")
 	sortBy := query.Get("sortBy")
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
 
 	args := []interface{}{}
 	argCount := 1
@@ -248,6 +250,26 @@ func GetChallenges(w http.ResponseWriter, r *http.Request) {
 		sqlQuery += " ORDER BY " + order
 	} else {
 		sqlQuery += " ORDER BY created_at DESC"
+	}
+
+	// Pagination
+	if limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			sqlQuery += " LIMIT $" + strconv.Itoa(argCount)
+			args = append(args, limit)
+			argCount++
+		}
+	} else {
+		// Limite par défaut de 50 pour éviter de retourner trop de données
+		sqlQuery += " LIMIT 50"
+	}
+
+	if offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			sqlQuery += " OFFSET $" + strconv.Itoa(argCount)
+			args = append(args, offset)
+			argCount++
+		}
 	}
 
 	rows, err := database.DB.Query(ctx, sqlQuery, args...)
