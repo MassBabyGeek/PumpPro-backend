@@ -262,6 +262,58 @@ func ScanWorkoutProgram(scanner interface {
 	return &p, nil
 }
 
+// ScanWorkoutProgramWithCreator scanne une ligne SQL vers un WorkoutProgram avec informations du créateur
+func ScanWorkoutProgramWithCreator(scanner interface {
+	Scan(dest ...interface{}) error
+}, unmarshalJSON func(data []byte, v interface{}) error) (*model.WorkoutProgram, error) {
+	var p model.WorkoutProgram
+	var repsSequenceJSON []byte
+	var createdBy, updatedBy, deletedBy sql.NullString
+	var createdAt, updatedAt, deletedAt sql.NullTime
+	var creatorID, creatorName, creatorAvatar sql.NullString
+
+	err := scanner.Scan(
+		&p.ID, &p.Name, &p.Description, &p.Type, &p.Variant, &p.Difficulty, &p.RestBetweenSets,
+		&p.TargetReps, &p.TimeLimit, &p.Duration, &p.AllowRest, &p.Sets, &p.RepsPerSet,
+		&repsSequenceJSON, &p.RepsPerMinute, &p.TotalMinutes,
+		&p.IsCustom, &p.IsFeatured, &p.UsageCount, &p.Likes,
+		&createdBy, &updatedBy, &deletedBy, &createdAt, &updatedAt, &deletedAt,
+		&creatorID, &creatorName, &creatorAvatar,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	p.CreatedBy = utils.NullStringToPointer(createdBy)
+	p.UpdatedBy = utils.NullStringToPointer(updatedBy)
+	p.DeletedBy = utils.NullStringToPointer(deletedBy)
+
+	if createdAt.Valid {
+		p.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		p.UpdatedAt = updatedAt.Time
+	}
+	if deletedAt.Valid {
+		p.DeletedAt = deletedAt.Time
+	}
+
+	if repsSequenceJSON != nil {
+		unmarshalJSON(repsSequenceJSON, &p.RepsSequence)
+	}
+
+	// Créer l'objet Creator si les données existent
+	if creatorID.Valid && creatorName.Valid {
+		p.Creator = &model.UserCreator{
+			ID:     creatorID.String,
+			Name:   creatorName.String,
+			Avatar: utils.NullStringToString(creatorAvatar),
+		}
+	}
+
+	return &p, nil
+}
+
 // ScanStats scanne une ligne SQL vers un Stats
 func ScanStats(scanner interface {
 	Scan(dest ...interface{}) error

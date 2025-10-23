@@ -35,13 +35,15 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 
 	sqlQuery := `
 		SELECT
-			id, name, description, type, variant, difficulty, rest_between_sets,
-			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
-			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
-		FROM workout_programs
-		WHERE deleted_at IS NULL
+			wp.id, wp.name, wp.description, wp.type, wp.variant, wp.difficulty, wp.rest_between_sets,
+			wp.target_reps, wp.time_limit, wp.duration, wp.allow_rest, wp.sets, wp.reps_per_set,
+			wp.reps_sequence, wp.reps_per_minute, wp.total_minutes,
+			wp.is_custom, wp.is_featured, wp.usage_count, COALESCE(wp.likes, 0) as likes,
+			wp.created_by, wp.updated_by, wp.deleted_by, wp.created_at, wp.updated_at, wp.deleted_at,
+			u.id as creator_id, u.name as creator_name, u.avatar as creator_avatar
+		FROM workout_programs wp
+		LEFT JOIN users u ON wp.created_by = u.id AND u.deleted_at IS NULL
+		WHERE wp.deleted_at IS NULL
 	`
 
 	args := []interface{}{}
@@ -91,7 +93,7 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 
 	var programs []model.WorkoutProgram
 	for rows.Next() {
-		program, err := scanner.ScanWorkoutProgramWithJSON(rows, json.Unmarshal)
+		program, err := scanner.ScanWorkoutProgramWithCreator(rows, json.Unmarshal)
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "could not scan program row", err)
 			return
@@ -104,9 +106,6 @@ func GetPrograms(w http.ResponseWriter, r *http.Request) {
 				program.UserLiked = likeInfo.UserLiked
 			}
 		}
-
-		// Load creator information
-		utils.EnrichWorkoutProgramWithCreator(ctx, program)
 
 		programs = append(programs, *program)
 	}
@@ -130,16 +129,18 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 
 	row := database.DB.QueryRow(ctx, `
 		SELECT
-			id, name, description, type, variant, difficulty, rest_between_sets,
-			target_reps, time_limit, duration, allow_rest, sets, reps_per_set,
-			reps_sequence, reps_per_minute, total_minutes,
-			is_custom, is_featured, usage_count, COALESCE(likes, 0) as likes,
-			created_by, updated_by, deleted_by, created_at, updated_at, deleted_at
-		FROM workout_programs
-		WHERE id=$1 AND deleted_at IS NULL
+			wp.id, wp.name, wp.description, wp.type, wp.variant, wp.difficulty, wp.rest_between_sets,
+			wp.target_reps, wp.time_limit, wp.duration, wp.allow_rest, wp.sets, wp.reps_per_set,
+			wp.reps_sequence, wp.reps_per_minute, wp.total_minutes,
+			wp.is_custom, wp.is_featured, wp.usage_count, COALESCE(wp.likes, 0) as likes,
+			wp.created_by, wp.updated_by, wp.deleted_by, wp.created_at, wp.updated_at, wp.deleted_at,
+			u.id as creator_id, u.name as creator_name, u.avatar as creator_avatar
+		FROM workout_programs wp
+		LEFT JOIN users u ON wp.created_by = u.id AND u.deleted_at IS NULL
+		WHERE wp.id=$1 AND wp.deleted_at IS NULL
 	`, id)
 
-	program, err := scanner.ScanWorkoutProgramWithJSON(row, json.Unmarshal)
+	program, err := scanner.ScanWorkoutProgramWithCreator(row, json.Unmarshal)
 	if err != nil {
 		utils.Error(w, http.StatusNotFound, "program not found", err)
 		return
@@ -152,9 +153,6 @@ func GetProgramById(w http.ResponseWriter, r *http.Request) {
 			program.UserLiked = likeInfo.UserLiked
 		}
 	}
-
-	// Load creator information
-	utils.EnrichWorkoutProgramWithCreator(ctx, program)
 
 	utils.Success(w, program)
 }
