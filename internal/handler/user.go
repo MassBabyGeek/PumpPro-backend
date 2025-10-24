@@ -577,3 +577,95 @@ func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 
 	utils.Success(w, sessions)
 }
+
+func GetUserStreak(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["userId"]
+
+	ctx := context.Background()
+
+	// Récupérer toutes les dates de workout distinctes, triées par ordre décroissant
+	rows, err := database.DB.Query(ctx, `
+		SELECT DISTINCT DATE(start_time) as workout_date
+		FROM workout_sessions
+		WHERE user_id = $1 AND deleted_at IS NULL
+		ORDER BY workout_date DESC
+	`, userID)
+
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not query workout dates", err)
+		return
+	}
+	defer rows.Close()
+
+	var dates []time.Time
+	for rows.Next() {
+		var date time.Time
+		if err := rows.Scan(&date); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not scan date", err)
+			return
+		}
+		dates = append(dates, date)
+	}
+
+	// Calculer le streak
+	currentStreak := 0
+	maxStreak := 0
+	var lastWorkoutDate *string
+
+	if len(dates) > 0 {
+		lastWorkoutDate = new(string)
+		*lastWorkoutDate = dates[0].Format("2006-01-02")
+
+		// Calculer le current streak
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		yesterday := today.AddDate(0, 0, -1)
+
+		// Le streak commence si le dernier workout était aujourd'hui ou hier
+		latestWorkout := dates[0].UTC().Truncate(24 * time.Hour)
+		if latestWorkout.Equal(today) || latestWorkout.Equal(yesterday) {
+			currentStreak = 1
+			expectedDate := latestWorkout.AddDate(0, 0, -1)
+
+			for i := 1; i < len(dates); i++ {
+				currentDate := dates[i].UTC().Truncate(24 * time.Hour)
+				if currentDate.Equal(expectedDate) {
+					currentStreak++
+					expectedDate = expectedDate.AddDate(0, 0, -1)
+				} else {
+					break
+				}
+			}
+		}
+
+		// Calculer le max streak
+		tempStreak := 1
+		maxStreak = 1
+		expectedDate := dates[0].UTC().Truncate(24 * time.Hour).AddDate(0, 0, -1)
+
+		for i := 1; i < len(dates); i++ {
+			currentDate := dates[i].UTC().Truncate(24 * time.Hour)
+			if currentDate.Equal(expectedDate) {
+				tempStreak++
+				if tempStreak > maxStreak {
+					maxStreak = tempStreak
+				}
+				expectedDate = expectedDate.AddDate(0, 0, -1)
+			} else {
+				tempStreak = 1
+				expectedDate = currentDate.AddDate(0, 0, -1)
+			}
+		}
+	}
+
+	response := map[string]interface{}{
+		"currentStreak": currentStreak,
+		"maxStreak":     maxStreak,
+	}
+
+	if lastWorkoutDate != nil {
+		response["lastWorkoutDate"] = *lastWorkoutDate
+	}
+
+	utils.Success(w, response)
+}
