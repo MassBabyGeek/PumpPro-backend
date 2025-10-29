@@ -2,10 +2,15 @@ package handler
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/MassBabyGeek/PumpPro-backend/internal/config"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
@@ -439,9 +444,46 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: En production, uploader le fichier vers un service de stockage (S3, Cloud Storage, etc.)
-	// Pour l'instant, on simule l'URL
-	avatarURL := "https://api.pompeurpro.com/avatars/" + user.ID + ".jpg"
+	// Déterminer l'extension du fichier
+	ext := ".jpg"
+	if contentType == "image/png" {
+		ext = ".png"
+	}
+
+	// Créer le nom du fichier
+	filename := user.ID + ext
+	uploadDir := "uploads/avatars"
+
+	// Créer le dossier s'il n'existe pas
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le dossier d'upload", err)
+		return
+	}
+
+	// Créer le fichier de destination
+	filepath := filepath.Join(uploadDir, filename)
+	dst, err := os.Create(filepath)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de créer le fichier", err)
+		return
+	}
+	defer dst.Close()
+
+	// Copier le fichier uploadé vers la destination
+	if _, err := io.Copy(dst, file); err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de sauvegarder le fichier", err)
+		return
+	}
+
+	// Charger la config pour récupérer l'URL de base
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de charger la configuration", err)
+		return
+	}
+
+	// Construire l'URL complète de l'avatar
+	avatarURL := fmt.Sprintf("%s/avatars/%s", cfg.URL, filename)
 
 	ctx := context.Background()
 
@@ -470,6 +512,51 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Success(w, updatedUser)
+}
+
+// GetAvatar sert l'image de profil d'un utilisateur
+func GetAvatar(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	filename := vars["filename"]
+
+	if filename == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "nom de fichier manquant")
+		return
+	}
+
+	// Construire le chemin du fichier
+	filePath := filepath.Join("uploads/avatars", filename)
+
+	// Vérifier que le fichier existe
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		utils.ErrorSimple(w, http.StatusNotFound, "image non trouvée")
+		return
+	}
+
+	// Ouvrir le fichier
+	file, err := os.Open(filePath)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de lire l'image", err)
+		return
+	}
+	defer file.Close()
+
+	// Déterminer le type MIME basé sur l'extension
+	ext := filepath.Ext(filename)
+	contentType := "image/jpeg"
+	if ext == ".png" {
+		contentType = "image/png"
+	}
+
+	// Définir les headers
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache 24h
+
+	// Servir le fichier
+	if _, err := io.Copy(w, file); err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible d'envoyer l'image", err)
+		return
+	}
 }
 
 func GetUsersWorkoutSessions(w http.ResponseWriter, r *http.Request) {

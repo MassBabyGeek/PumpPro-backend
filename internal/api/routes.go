@@ -38,6 +38,7 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{id}", handler.DeleteUser).Methods(http.MethodDelete)
 	authenticatedRoutes.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
+	r.HandleFunc("/avatars/{filename}", handler.GetAvatar).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{userId}/stats/{period}", handler.GetUserStats).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{userId}/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/streak", handler.GetUserStreak).Methods(http.MethodGet)
