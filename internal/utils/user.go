@@ -127,6 +127,16 @@ func CreateUser(ctx context.Context, name, email, passwordHash, avatar, provider
 	// Mise à jour de created_by
 	_, _ = database.DB.Exec(ctx, `UPDATE users SET created_by=$1 WHERE id=$1`, user.ID)
 
+	// Si aucun avatar n'a été fourni, générer un avatar par défaut
+	if avatar == "" {
+		defaultAvatar, err := GenerateDefaultAvatar(user.ID, name)
+		if err == nil {
+			// Mettre à jour l'avatar dans la base de données
+			_, _ = database.DB.Exec(ctx, `UPDATE users SET avatar=$1 WHERE id=$2`, defaultAvatar, user.ID)
+			user.Avatar = defaultAvatar
+		}
+	}
+
 	user.Provider = provider
 	return &user, nil
 }

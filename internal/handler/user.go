@@ -460,6 +460,16 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Supprimer les anciennes photos de cet utilisateur (jpg, png, jpeg, svg)
+	oldExtensions := []string{".jpg", ".jpeg", ".png", ".svg"}
+	for _, oldExt := range oldExtensions {
+		oldFilePath := filepath.Join(uploadDir, user.ID+oldExt)
+		if _, err := os.Stat(oldFilePath); err == nil {
+			// Le fichier existe, on le supprime
+			os.Remove(oldFilePath)
+		}
+	}
+
 	// Créer le fichier de destination
 	filepath := filepath.Join(uploadDir, filename)
 	dst, err := os.Create(filepath)
@@ -546,6 +556,8 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	contentType := "image/jpeg"
 	if ext == ".png" {
 		contentType = "image/png"
+	} else if ext == ".svg" {
+		contentType = "image/svg+xml"
 	}
 
 	// Définir les headers
