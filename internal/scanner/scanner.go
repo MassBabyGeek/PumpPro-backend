@@ -206,21 +206,6 @@ func ScanWorkoutSessionWithCreatorAndUser(scanner interface {
 	return &s, nil
 }
 
-// ScanSetResult scanne une ligne SQL vers un SetResult
-func ScanSetResult(scanner interface {
-	Scan(dest ...interface{}) error
-}) (*model.SetResult, error) {
-	var s model.SetResult
-	err := scanner.Scan(
-		&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps,
-		&s.CompletedReps, &s.Duration, &s.Timestamp,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
 // ✅ ScanWorkoutProgramWithJSON corrigée (NullTime-safe + Likes)
 func ScanWorkoutProgramWithJSON(scanner interface {
 	Scan(dest ...interface{}) error

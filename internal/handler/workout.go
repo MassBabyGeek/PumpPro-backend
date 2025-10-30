@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -44,43 +43,23 @@ func validateWorkoutCompletion(program *model.WorkoutProgram, session *model.Wor
 		return false
 
 	case "SETS_REPS":
-		// Vérifier que le nombre de sets et reps par set sont atteints
+		// Vérifier que le nombre total de reps correspond aux attentes
 		if program.Sets != nil && program.RepsPerSet != nil {
-			expectedSets := *program.Sets
-			expectedRepsPerSet := *program.RepsPerSet
-
-			// Vérifier qu'on a le bon nombre de sets
-			if len(session.Sets) != expectedSets {
-				return false
-			}
-
-			// Vérifier que chaque set a le bon nombre de reps (avec tolérance de 90%)
-			for _, set := range session.Sets {
-				minReps := int(float64(expectedRepsPerSet) * 0.9)
-				if set.CompletedReps < minReps {
-					return false
-				}
-			}
-			return true
+			expectedTotalReps := *program.Sets * *program.RepsPerSet
+			minReps := int(float64(expectedTotalReps) * 0.9) // Tolérance de 90%
+			return session.TotalReps >= minReps
 		}
 		return false
 
 	case "PYRAMID":
-		// Vérifier que la séquence de reps est respectée
+		// Vérifier que le total de reps correspond à la séquence pyramide
 		if len(program.RepsSequence) > 0 {
-			if len(session.Sets) != len(program.RepsSequence) {
-				return false
+			expectedTotalReps := 0
+			for _, reps := range program.RepsSequence {
+				expectedTotalReps += reps
 			}
-
-			// Vérifier que chaque set respecte la séquence (avec tolérance de 90%)
-			for i, set := range session.Sets {
-				expectedReps := program.RepsSequence[i]
-				minReps := int(float64(expectedReps) * 0.9)
-				if set.CompletedReps < minReps {
-					return false
-				}
-			}
-			return true
+			minReps := int(float64(expectedTotalReps) * 0.9) // Tolérance de 90%
+			return session.TotalReps >= minReps
 		}
 		return false
 
@@ -245,23 +224,6 @@ func SaveWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Sauvegarder les sets s'ils sont fournis
-	if len(session.Sets) > 0 {
-		for _, set := range session.Sets {
-			_, err := database.DB.Exec(ctx, `
-				INSERT INTO set_results(session_id, set_number, target_reps, completed_reps, duration, timestamp)
-				VALUES($1, $2, $3, $4, $5, $6)
-			`,
-				session.ID, set.SetNumber, set.TargetReps, set.CompletedReps, set.Duration, set.Timestamp,
-			)
-
-			if err != nil {
-				utils.Error(w, http.StatusInternalServerError, "could not save set result", err)
-				return
-			}
-		}
-	}
-
 	// Incrémenter le usage_count du programme
 	_, err = database.DB.Exec(ctx,
 		`UPDATE workout_programs SET usage_count = usage_count + 1 WHERE id = $1`,
@@ -395,34 +357,6 @@ func GetWorkoutSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		sessions = append(sessions, *session)
-	}
-
-	// Charger les sets pour chaque session
-	for i := range sessions {
-		setRows, err := database.DB.Query(ctx, `
-			SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-			FROM set_results
-			WHERE session_id = $1
-			ORDER BY set_number ASC
-		`, sessions[i].ID)
-
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-			return
-		}
-
-		var sets []model.SetResult
-		for setRows.Next() {
-			set, err := scanner.ScanSetResult(setRows)
-			if err != nil {
-				setRows.Close()
-				utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-				return
-			}
-			sets = append(sets, *set)
-		}
-		setRows.Close()
-		sessions[i].Sets = sets
 	}
 
 	utils.Success(w, sessions)
@@ -582,33 +516,6 @@ func GetWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les sets associés
-	rows, err = database.DB.Query(ctx, `
-		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-		FROM set_results
-		WHERE session_id = $1
-		ORDER BY set_number ASC
-	`, sessionID)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-		return
-	}
-	defer rows.Close()
-
-	var sets []model.SetResult
-	for rows.Next() {
-		var s model.SetResult
-		if err := rows.Scan(
-			&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
-		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-			return
-		}
-		sets = append(sets, s)
-	}
-	session.Sets = sets
-
 	utils.Success(w, session)
 }
 
@@ -719,33 +626,6 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Charger les sets associés
-	rows, err := database.DB.Query(ctx, `
-		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-		FROM set_results
-		WHERE session_id = $1
-		ORDER BY set_number ASC
-	`, sessionID)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-		return
-	}
-	defer rows.Close()
-
-	var sets []model.SetResult
-	for rows.Next() {
-		var s model.SetResult
-		if err := rows.Scan(
-			&s.ID, &s.SessionID, &s.SetNumber, &s.TargetReps, &s.CompletedReps, &s.Duration, &s.Timestamp,
-		); err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-			return
-		}
-		sets = append(sets, s)
-	}
-	session.Sets = sets
-
 	utils.Success(w, session)
 }
 
@@ -831,84 +711,7 @@ func GetPersonalRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Record de répétitions dans une série
-	err = database.DB.QueryRow(ctx, `
-		SELECT COALESCE(MAX(sr.completed_reps), 0)
-		FROM set_results sr
-		INNER JOIN workout_sessions ws ON sr.session_id = ws.id
-		WHERE ws.user_id = $1
-	`, userID).Scan(&records.MaxRepsInSet)
-
-	if err != nil && err != sql.ErrNoRows {
-		utils.Error(w, http.StatusInternalServerError, "could not fetch set records", err)
-		return
-	}
-
 	utils.Success(w, records)
-}
-
-// SaveSetResults enregistre les résultats d'une série
-func SaveSetResults(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	sessionID := vars["sessionId"]
-
-	var setResults []model.SetResult
-	if err := utils.DecodeJSON(r, &setResults); err != nil {
-		utils.ErrorSimple(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	ctx := context.Background()
-
-	// Insérer tous les résultats de séries
-	for _, set := range setResults {
-		_, err := database.DB.Exec(ctx, `
-			INSERT INTO set_results(session_id, set_number, target_reps, completed_reps, duration, timestamp)
-			VALUES($1, $2, $3, $4, $5, $6)
-		`,
-			sessionID, set.SetNumber, set.TargetReps, set.CompletedReps, set.Duration, set.Timestamp,
-		)
-
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not save set result", err)
-			return
-		}
-	}
-
-	utils.Success(w, map[string]bool{"success": true})
-}
-
-// GetSetResults récupère les résultats des séries d'une session
-func GetSetResults(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	sessionID := vars["sessionId"]
-
-	ctx := context.Background()
-
-	rows, err := database.DB.Query(ctx, `
-		SELECT id, session_id, set_number, target_reps, completed_reps, duration, timestamp
-		FROM set_results
-		WHERE session_id = $1
-		ORDER BY set_number ASC
-	`, sessionID)
-
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "could not query set results", err)
-		return
-	}
-	defer rows.Close()
-
-	var results []model.SetResult
-	for rows.Next() {
-		result, err := scanner.ScanSetResult(rows)
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "could not scan set result", err)
-			return
-		}
-		results = append(results, *result)
-	}
-
-	utils.Success(w, results)
 }
 
 // LikeWorkout ajoute un like à une session de travail

@@ -103,10 +103,6 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/users/{userId}/workouts/summary", handler.GetWorkoutSummary).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/workouts/records", handler.GetPersonalRecords).Methods(http.MethodGet)
 
-	// Set results
-	r.HandleFunc("/workouts/{sessionId}/sets", handler.SaveSetResults).Methods(http.MethodPost)
-	r.HandleFunc("/workouts/{sessionId}/sets", handler.GetSetResults).Methods(http.MethodGet)
-
 	// Leaderboard
 	r.HandleFunc("/leaderboard", handler.GetLeaderboard).Methods(http.MethodGet)
 	r.HandleFunc("/leaderboard/top", handler.GetTopPerformers).Methods(http.MethodGet)

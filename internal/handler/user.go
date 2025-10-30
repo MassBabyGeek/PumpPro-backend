@@ -108,7 +108,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	sqlQuery := `
 		SELECT
-			id, name, email, avatar, age, weight, height, goal, score,
+			id, name, email, avatar, age, weight, height, goal, score, is_admin,
 			join_date, created_at, updated_at,
 			created_by, updated_by
 		FROM users
@@ -166,7 +166,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	row := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, avatar, age, weight, height, goal, score,
+		`SELECT id, name, email, avatar, age, weight, height, goal, score, is_admin,
 			 join_date, created_at, updated_at,
 			 created_by, updated_by
 		 FROM users WHERE id=$1 AND deleted_at IS NULL`,
