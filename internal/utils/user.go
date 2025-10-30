@@ -84,15 +84,16 @@ func FindUserByEmailWithPassword(ctx context.Context, email string) (*model.User
 	var passwordHash string
 	var avatar, goal sql.NullString
 	var age, score sql.NullInt64
+	var IsAdmin sql.NullBool
 	var weight, height sql.NullFloat64
 
 	err := database.DB.QueryRow(ctx,
 		`SELECT id, name, email, avatar, age, weight, height, goal, score,
-		 join_date, created_at, updated_at, password_hash
+		 join_date, created_at, updated_at, password_hash, is_admin
 		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
 		email,
 	).Scan(&user.ID, &user.Name, &user.Email, &avatar, &age, &weight, &height,
-		&goal, &score, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt, &passwordHash)
+		&goal, &score, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt, &passwordHash, IsAdmin)
 
 	if err != nil {
 		return nil, "", err
@@ -104,6 +105,7 @@ func FindUserByEmailWithPassword(ctx context.Context, email string) (*model.User
 	user.Weight = NullFloat64ToFloat64(weight)
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
+	user.IsAdmin = NullBoolToBool(IsAdmin)
 
 	return &user, passwordHash, nil
 }
