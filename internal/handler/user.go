@@ -519,7 +519,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	// Récupérer le profil mis à jour
 	row := database.DB.QueryRow(ctx, `
 		SELECT id, name, email, avatar, age, weight, height, goal, score,
-		       join_date, created_at, updated_at, created_by, updated_by
+		       is_admin, join_date, created_at, updated_at, created_by, updated_by
 		FROM users WHERE id=$1 AND deleted_at IS NULL
 	`, user.ID)
 
@@ -532,7 +532,6 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, updatedUser)
 }
 
-// GetAvatar sert l'image de profil d'un utilisateur
 // GetAvatar sert l'image de profil d'un utilisateur
 func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)

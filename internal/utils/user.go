@@ -15,15 +15,16 @@ func FindUserByID(ctx context.Context, userID string) (*model.UserProfile, strin
 	var passwordHash sql.NullString
 	var avatar, goal, provider sql.NullString
 	var age, score sql.NullInt64
+	var IsAdmin sql.NullBool
 	var weight, height sql.NullFloat64
 
 	err := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, avatar, age, weight, height, goal, score, provider, password_hash,
+		`SELECT id, name, email, avatar, age, weight, height, goal, score, is_admin, provider, password_hash,
 		 join_date, created_at, updated_at
 		 FROM users WHERE id=$1 AND deleted_at IS NULL`,
 		userID,
 	).Scan(&user.ID, &user.Name, &user.Email, &avatar, &age, &weight, &height,
-		&goal, &score, &provider, &passwordHash, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+		&goal, &score, &IsAdmin, &provider, &passwordHash, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		return nil, "", err
@@ -39,6 +40,7 @@ func FindUserByID(ctx context.Context, userID string) (*model.UserProfile, strin
 	user.Weight = NullFloat64ToFloat64(weight)
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
+	user.IsAdmin = NullBoolToBool(IsAdmin)
 
 	return &user, NullStringToString(passwordHash), nil
 }
@@ -50,14 +52,15 @@ func FindUserByEmail(ctx context.Context, email string) (*model.UserProfile, err
 	var avatar, goal, provider sql.NullString
 	var age, score sql.NullInt64
 	var weight, height sql.NullFloat64
+	var IsAdmin sql.NullBool
 
 	err := database.DB.QueryRow(ctx,
-		`SELECT id, name, email, avatar, age, weight, height, goal, score, provider,
+		`SELECT id, name, email, avatar, age, weight, height, goal, score, is_admin, provider,
 		 join_date, created_at, updated_at
 		 FROM users WHERE email=$1 AND deleted_at IS NULL`,
 		email,
 	).Scan(&user.ID, &user.Name, &user.Email, &avatar, &age, &weight, &height,
-		&goal, &score, &provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+		&goal, &score, &IsAdmin, &provider, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		return nil, err
@@ -73,6 +76,7 @@ func FindUserByEmail(ctx context.Context, email string) (*model.UserProfile, err
 	user.Weight = NullFloat64ToFloat64(weight)
 	user.Height = NullFloat64ToFloat64(height)
 	user.Score = NullInt64ToInt(score)
+	user.IsAdmin = NullBoolToBool(IsAdmin)
 
 	return &user, nil
 }
@@ -117,12 +121,12 @@ func CreateUser(ctx context.Context, name, email, passwordHash, avatar, provider
 
 	var user model.UserProfile
 	err := database.DB.QueryRow(ctx,
-		`INSERT INTO users(name, email, password_hash, avatar, provider, age, weight, height, goal, score, join_date, created_at, updated_at)
-		 VALUES($1, $2, $3, $4, $5, 0, 0, 0, '', 0, NOW(), NOW(), NOW())
-		 RETURNING id, name, email, avatar, age, weight, height, goal, score, join_date, created_at, updated_at`,
+		`INSERT INTO users(name, email, password_hash, avatar, provider, age, weight, height, goal, score, join_date, created_at, updated_at, is_admin)
+		 VALUES($1, $2, $3, $4, $5, 0, 0, 0, '', 0, NOW(), NOW(), NOW(), FALSE)
+		 RETURNING id, name, email, avatar, age, weight, height, goal, score, join_date, created_at, updated_at, is_admin`,
 		name, email, passwordHash, avatar, provider,
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Avatar, &user.Age, &user.Weight, &user.Height,
-		&user.Goal, &user.Score, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt)
+		&user.Goal, &user.Score, &user.JoinDate, &user.CreatedAt, &user.UpdatedAt, &user.IsAdmin)
 
 	if err != nil {
 		return nil, err
