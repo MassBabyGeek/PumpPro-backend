@@ -37,19 +37,20 @@ type WorkoutProgram struct {
 }
 
 type WorkoutSession struct {
-	ID              string     `json:"sessionId"`
-	ProgramID       string     `json:"programId"`
-	UserID          string     `json:"userId"`
-	ChallengeID     *string    `json:"challengeId,omitempty"`
-	ChallengeTaskID *string    `json:"challengeTaskId,omitempty"`
-	StartTime       time.Time  `json:"startTime"`
-	EndTime         *time.Time `json:"endTime,omitempty"`
-	TotalReps       int        `json:"totalReps"`
-	TotalDuration   int        `json:"totalDuration"` // en secondes
-	Completed       bool       `json:"completed"`
-	Notes           *string    `json:"notes,omitempty"`
-	Likes           int        `json:"likes"`
-	UserLiked       bool       `json:"userLiked"`
+	ID              string        `json:"sessionId"`
+	ProgramID       string        `json:"programId"`
+	UserID          string        `json:"userId"`
+	ChallengeID     *string       `json:"challengeId,omitempty"`
+	ChallengeTaskID *string       `json:"challengeTaskId,omitempty"`
+	StartTime       time.Time     `json:"startTime"`
+	EndTime         *time.Time    `json:"endTime,omitempty"`
+	TotalReps       int           `json:"totalReps"`
+	TotalDuration   int           `json:"totalDuration"` // en secondes
+	Completed       bool          `json:"completed"`
+	Notes           *string       `json:"notes,omitempty"`
+	Likes           int           `json:"likes"`
+	UserLiked       bool          `json:"userLiked"`
+	Sets            []interface{} `json:"sets"`
 
 	Creator *UserCreator `json:"creator,omitempty"`
 	User    *UserCreator `json:"user,omitempty"` // L'utilisateur qui a fait la session
