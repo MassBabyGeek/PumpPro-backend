@@ -117,6 +117,7 @@ func ScanChallengeWithPqArray(scanner interface {
 	var c model.Challenge
 	var startDate, endDate, createdAt, updatedAt, deletedAt sql.NullTime
 	var createdBy, updatedBy, deletedBy sql.NullString
+	var userCompleted, userLiked, userParticipated sql.NullBool
 
 	err := scanner.Scan(
 		&c.ID, &c.Title, &c.Description, &c.Category, &c.Type, &c.Variant, &c.Difficulty,
@@ -124,6 +125,7 @@ func ScanChallengeWithPqArray(scanner interface {
 		&c.IconName, &c.IconColor, &c.Participants, &c.Completions, &c.Likes, &c.Points,
 		&c.Badge, &startDate, &endDate, &c.Status, pq.Array(&c.Tags), &c.IsOfficial,
 		&createdBy, &updatedBy, &deletedBy, &createdAt, &updatedAt, &deletedAt,
+		&userCompleted, &userLiked, &userParticipated,
 	)
 	if err != nil {
 		return nil, err
@@ -144,6 +146,10 @@ func ScanChallengeWithPqArray(scanner interface {
 	if deletedAt.Valid {
 		c.DeletedAt = deletedAt.Time
 	}
+
+	c.UserCompleted = utils.NullBoolToBool(userCompleted)
+	c.UserLiked = utils.NullBoolToBool(userLiked)
+	c.UserParticipated = utils.NullBoolToBool(userParticipated)
 
 	return &c, nil
 }
