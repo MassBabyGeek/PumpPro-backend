@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/config"
@@ -528,6 +529,7 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAvatar sert l'image de profil d'un utilisateur
+// GetAvatar sert l'image de profil d'un utilisateur
 func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	filename := vars["filename"]
@@ -537,8 +539,15 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Construire le chemin du fichier
-	filePath := filepath.Join("uploads/avatars", filename)
+	// Récupérer le chemin absolu vers le répertoire d'uploads
+	cwd, err := os.Getwd()
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "impossible de déterminer le répertoire courant", err)
+		return
+	}
+
+	// Construire le chemin complet du fichier
+	filePath := filepath.Join(cwd, "uploads", "avatars", filename)
 
 	// Vérifier que le fichier existe
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -549,27 +558,34 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	// Ouvrir le fichier
 	file, err := os.Open(filePath)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de lire l'image", err)
+		utils.Error(w, http.StatusInternalServerError, "impossible d'ouvrir l'image", err)
 		return
 	}
 	defer file.Close()
 
-	// Déterminer le type MIME basé sur l'extension
-	ext := filepath.Ext(filename)
-	contentType := "image/jpeg"
-	if ext == ".png" {
+	// Déterminer le type MIME en fonction de l’extension
+	ext := strings.ToLower(filepath.Ext(filename))
+	var contentType string
+
+	switch ext {
+	case ".png":
 		contentType = "image/png"
-	} else if ext == ".svg" {
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".svg":
 		contentType = "image/svg+xml"
+	default:
+		utils.ErrorSimple(w, http.StatusBadRequest, "format d'image non supporté")
+		return
 	}
 
-	// Définir les headers
+	// Définir les en-têtes HTTP
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache 24h
+	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache de 24h
 
-	// Servir le fichier
+	// Envoyer le contenu de l'image
 	if _, err := io.Copy(w, file); err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible d'envoyer l'image", err)
+		utils.Error(w, http.StatusInternalServerError, "erreur lors de l'envoi de l'image", err)
 		return
 	}
 }
