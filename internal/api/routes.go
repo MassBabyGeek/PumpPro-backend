@@ -128,6 +128,20 @@ func SetupRouter() http.Handler {
 	authenticatedRoutes.HandleFunc("/bug-reports/{id}", handler.DeleteBugReport).Methods(http.MethodDelete)
 
 	// Admin routes (require admin privileges)
+	// Dashboard & Statistics
+	authenticatedRoutes.HandleFunc("/admin/dashboard", handler.GetAdminDashboard).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/activity", handler.GetAdminRecentActivity).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/health", handler.GetAdminSystemHealth).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/top-content", handler.GetAdminTopContent).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/analytics", handler.GetAdminAnalytics).Methods(http.MethodGet)
+
+	// User Management
+	authenticatedRoutes.HandleFunc("/admin/users", handler.GetAdminUsers).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/users/{userId}/promote", handler.PromoteUserToAdmin).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/admin/users/{userId}/demote", handler.DemoteUserFromAdmin).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/admin/users/{userId}", handler.DeleteUserPermanently).Methods(http.MethodDelete)
+
+	// Content Management
 	authenticatedRoutes.HandleFunc("/admin/photos", handler.GetAllPhotos).Methods(http.MethodGet)
 
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
