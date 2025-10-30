@@ -269,6 +269,10 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 		startDate = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 		endDate = time.Date(now.Year(), 12, 31, 23, 59, 59, 999999999, now.Location())
 
+	case "all-time":
+		startDate = time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)
+		endDate = time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC)
+
 	default:
 		utils.ErrorSimple(w, http.StatusBadRequest, "période invalide")
 		return
