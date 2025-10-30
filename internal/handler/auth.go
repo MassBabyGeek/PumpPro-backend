@@ -43,7 +43,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	// Rechercher l'utilisateur avec son mot de passe
 	user, hashedPassword, err := utils.FindUserByEmailWithPassword(ctx, req.Email)
 	if err != nil {
-		utils.ErrorSimple(w, http.StatusUnauthorized, "identifiants invalides")
+		utils.ErrorSimple(w, http.StatusUnauthorized, "Une erreur est survenue lors de FindUserByEmailWithPassword")
 		return
 	}
 
