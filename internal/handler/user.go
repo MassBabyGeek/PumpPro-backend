@@ -238,17 +238,21 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vérifier que l'utilisateur est admin OU consulte ses propres stats
+	if !middleware.IsOwnerOrAdmin(r, userId) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you can only view your own stats unless you are an admin")
+		return
+	}
+
 	var startDate, endDate time.Time
 	now := time.Now()
 
 	switch period {
 	case "daily", "today":
-		// Début et fin de la journée
 		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		endDate = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
 
 	case "weekly", "week":
-		// Début de la semaine (lundi) et fin (dimanche)
 		weekday := int(now.Weekday())
 		if weekday == 0 { // dimanche
 			weekday = 7
@@ -257,12 +261,10 @@ func GetUserStats(w http.ResponseWriter, r *http.Request) {
 		endDate = startDate.AddDate(0, 0, 6).Add(time.Hour*23 + time.Minute*59 + time.Second*59)
 
 	case "monthly", "month":
-		// Début et fin du mois
 		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		endDate = startDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
 	case "yearly", "year":
-		// Début et fin de l'année
 		startDate = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 		endDate = time.Date(now.Year(), 12, 31, 23, 59, 59, 999999999, now.Location())
 
@@ -308,7 +310,6 @@ func GetChartData(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Construction dynamique de la requête
 	var query string
 	var args []interface{}
 
@@ -742,7 +743,7 @@ func GetUserStreak(w http.ResponseWriter, r *http.Request) {
 		// Calculer le max streak
 		tempStreak := 1
 		maxStreak = 1
-		expectedDate := dates[0].UTC().Truncate(24 * time.Hour).AddDate(0, 0, -1)
+		expectedDate := dates[0].UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
 
 		for i := 1; i < len(dates); i++ {
 			currentDate := dates[i].UTC().Truncate(24 * time.Hour)
