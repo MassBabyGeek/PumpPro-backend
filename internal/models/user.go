@@ -25,6 +25,7 @@ type UserProfile struct {
 	Goal     string    `json:"goal,omitempty"`
 	Provider string    `json:"provider,omitempty"` // email, google, apple
 	Score    int       `json:"score"`
+	IsAdmin  bool      `json:"isAdmin"`
 	JoinDate time.Time `json:"joinDate,omitempty"`
 	DateFields
 }

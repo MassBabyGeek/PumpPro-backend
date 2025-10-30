@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -460,7 +461,29 @@ func UpdateChallenge(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	_, err := database.DB.Exec(ctx, `
+	// Récupérer le created_by du challenge pour vérifier la propriété
+	var createdBy sql.NullString
+	err := database.DB.QueryRow(ctx,
+		`SELECT created_by FROM challenges WHERE id=$1 AND deleted_at IS NULL`,
+		id,
+	).Scan(&createdBy)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "challenge not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du challenge
+	var ownerID string
+	if createdBy.Valid {
+		ownerID = createdBy.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to update this challenge")
+		return
+	}
+
+	_, err = database.DB.Exec(ctx, `
 		UPDATE challenges SET
 			title=$1, description=$2, category=$3, type=$4, variant=$5, difficulty=$6,
 			target_reps=$7, duration=$8, sets=$9, reps_per_set=$10, image_url=$11,
@@ -498,6 +521,29 @@ func DeleteChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
+
+	// Récupérer le created_by du challenge pour vérifier la propriété
+	var createdBy sql.NullString
+	err := database.DB.QueryRow(ctx,
+		`SELECT created_by FROM challenges WHERE id=$1 AND deleted_at IS NULL`,
+		id,
+	).Scan(&createdBy)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "challenge not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du challenge
+	var ownerID string
+	if createdBy.Valid {
+		ownerID = createdBy.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to delete this challenge")
+		return
+	}
+
 	res, err := database.DB.Exec(ctx, `
 		UPDATE challenges SET deleted_at=NOW(), deleted_by=$2
 		WHERE id=$1 AND deleted_at IS NULL

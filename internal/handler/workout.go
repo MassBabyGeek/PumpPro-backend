@@ -498,6 +498,25 @@ func DeleteWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Récupérer le user_id de la session pour vérifier la propriété
+	var sessionUserID string
+	var err error
+	err = database.DB.QueryRow(ctx,
+		`SELECT user_id FROM workout_sessions WHERE id = $1`,
+		sessionID,
+	).Scan(&sessionUserID)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire de la session
+	if !middleware.IsOwnerOrAdmin(r, sessionUserID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to delete this session")
+		return
+	}
+
 	res, err := database.DB.Exec(ctx,
 		`DELETE FROM workout_sessions WHERE id = $1`,
 		sessionID,
@@ -606,6 +625,25 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Récupérer le user_id de la session pour vérifier la propriété
+	var sessionUserID string
+	var err error
+	err = database.DB.QueryRow(ctx,
+		`SELECT user_id FROM workout_sessions WHERE id = $1`,
+		sessionID,
+	).Scan(&sessionUserID)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire de la session
+	if !middleware.IsOwnerOrAdmin(r, sessionUserID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to update this session")
+		return
+	}
+
 	// Construction dynamique de la requête UPDATE
 	query := "UPDATE workout_sessions SET updated_at = NOW()"
 	args := []interface{}{}
@@ -644,7 +682,7 @@ func UpdateWorkoutSession(w http.ResponseWriter, r *http.Request) {
 	query += " WHERE id = $" + strconv.Itoa(argCount)
 	args = append(args, sessionID)
 
-	_, err := database.DB.Exec(ctx, query, args...)
+	_, err = database.DB.Exec(ctx, query, args...)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "could not update session", err)
 		return

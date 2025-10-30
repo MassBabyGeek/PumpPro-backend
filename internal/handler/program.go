@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -233,11 +234,13 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	// Vérifier que c'est un programme custom (seuls les custom peuvent être modifiés)
+	// et récupérer le created_by pour vérifier la propriété
 	var isCustom bool
+	var createdBy sql.NullString
 	err := database.DB.QueryRow(ctx,
-		`SELECT is_custom FROM workout_programs WHERE id=$1 AND deleted_at IS NULL`,
+		`SELECT is_custom, created_by FROM workout_programs WHERE id=$1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&isCustom)
+	).Scan(&isCustom, &createdBy)
 
 	if err != nil {
 		utils.ErrorSimple(w, http.StatusNotFound, "program not found")
@@ -246,6 +249,16 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 
 	if !isCustom {
 		utils.ErrorSimple(w, http.StatusForbidden, "cannot modify non-custom program")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du programme
+	var ownerID string
+	if createdBy.Valid {
+		ownerID = createdBy.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to modify this program")
 		return
 	}
 
@@ -290,12 +303,13 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Vérifier que c'est un programme custom
+	// Vérifier que c'est un programme custom et récupérer le created_by
 	var isCustom bool
+	var createdBy sql.NullString
 	err := database.DB.QueryRow(ctx,
-		`SELECT is_custom FROM workout_programs WHERE id=$1 AND deleted_at IS NULL`,
+		`SELECT is_custom, created_by FROM workout_programs WHERE id=$1 AND deleted_at IS NULL`,
 		id,
-	).Scan(&isCustom)
+	).Scan(&isCustom, &createdBy)
 
 	if err != nil {
 		utils.ErrorSimple(w, http.StatusNotFound, "program not found")
@@ -304,6 +318,16 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 
 	if !isCustom {
 		utils.ErrorSimple(w, http.StatusForbidden, "cannot delete non-custom program")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du programme
+	var ownerID string
+	if createdBy.Valid {
+		ownerID = createdBy.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to delete this program")
 		return
 	}
 

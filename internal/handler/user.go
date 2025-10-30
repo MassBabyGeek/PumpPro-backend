@@ -196,8 +196,9 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.ID != userId {
-		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de supprimer l'utilisateur")
+	// Vérifier si l'utilisateur est admin OU s'il supprime son propre compte
+	if !middleware.IsOwnerOrAdmin(r, userId) {
+		utils.ErrorSimple(w, http.StatusForbidden, "impossible de supprimer l'utilisateur")
 		return
 	}
 
@@ -422,8 +423,9 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.ID != userId {
-		utils.ErrorSimple(w, http.StatusUnauthorized, "impossible de modifier l'utilisateur")
+	// Vérifier si l'utilisateur est admin OU s'il modifie son propre profil
+	if !middleware.IsOwnerOrAdmin(r, userId) {
+		utils.ErrorSimple(w, http.StatusForbidden, "impossible de modifier l'utilisateur")
 		return
 	}
 

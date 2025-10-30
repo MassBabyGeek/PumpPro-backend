@@ -23,7 +23,7 @@ func ScanUserProfile(scanner interface {
 
 	err := scanner.Scan(
 		&user.ID, &user.Name, &user.Email, &avatar,
-		&age, &weight, &height, &goal, &score,
+		&age, &weight, &height, &goal, &score, &user.IsAdmin,
 		&user.JoinDate, &user.CreatedAt, &user.UpdatedAt,
 		&user.CreatedBy, &updatedBy,
 	)

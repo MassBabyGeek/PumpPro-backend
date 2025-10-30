@@ -102,6 +102,7 @@ func validateTokenAndGetUser(ctx context.Context, token string) (*model.UserProf
 		u.height,
 		u.goal,
 		u.score,
+		u.is_admin,
 		u.join_date,
 		u.created_at,
 		u.updated_at,
@@ -163,4 +164,38 @@ func RequireAuth(r *http.Request) (model.UserProfile, error) {
 // ValidateToken valide un token sans passer par le middleware (utile pour des cas spécifiques)
 func ValidateToken(ctx context.Context, token string) (*model.UserProfile, error) {
 	return validateTokenAndGetUser(ctx, token)
+}
+
+// IsAdmin vérifie si l'utilisateur dans le contexte est admin
+func IsAdmin(r *http.Request) bool {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		return false
+	}
+	return user.IsAdmin
+}
+
+// IsOwnerOrAdmin vérifie si l'utilisateur est le propriétaire de la ressource OU s'il est admin
+func IsOwnerOrAdmin(r *http.Request, resourceOwnerID string) bool {
+	user, err := GetUserFromContext(r)
+	if err != nil {
+		return false
+	}
+	// Si admin, on autorise tout
+	if user.IsAdmin {
+		return true
+	}
+	// Sinon, on vérifie que c'est bien le propriétaire
+	return user.ID == resourceOwnerID
+}
+
+// RequireAdmin est un middleware qui vérifie que l'utilisateur est admin
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !IsAdmin(r) {
+			utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -189,6 +190,28 @@ func UpdateBugReport(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	// Récupérer le user_id du bug report pour vérifier la propriété
+	var reportUserID sql.NullString
+	err = database.DB.QueryRow(ctx,
+		`SELECT user_id FROM bug_reports WHERE id=$1`,
+		id,
+	).Scan(&reportUserID)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "bug report not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du bug report
+	var ownerID string
+	if reportUserID.Valid {
+		ownerID = reportUserID.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to update this bug report")
+		return
+	}
+
 	// Construction dynamique de la requête UPDATE
 	query := "UPDATE bug_reports SET updated_at = NOW()"
 	args := []interface{}{}
@@ -233,6 +256,28 @@ func DeleteBugReport(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	ctx := context.Background()
+
+	// Récupérer le user_id du bug report pour vérifier la propriété
+	var reportUserID sql.NullString
+	err := database.DB.QueryRow(ctx,
+		`SELECT user_id FROM bug_reports WHERE id=$1`,
+		id,
+	).Scan(&reportUserID)
+
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusNotFound, "bug report not found")
+		return
+	}
+
+	// Vérifier que l'utilisateur est admin OU propriétaire du bug report
+	var ownerID string
+	if reportUserID.Valid {
+		ownerID = reportUserID.String
+	}
+	if !middleware.IsOwnerOrAdmin(r, ownerID) {
+		utils.ErrorSimple(w, http.StatusForbidden, "you are not authorized to delete this bug report")
+		return
+	}
 
 	res, err := database.DB.Exec(ctx, "DELETE FROM bug_reports WHERE id = $1", id)
 	if err != nil {
