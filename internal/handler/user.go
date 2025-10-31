@@ -16,6 +16,7 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/services"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 
@@ -447,63 +448,81 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 	// Vérifier le type de fichier
 	contentType := handler.Header.Get("Content-Type")
-	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/jpg" {
-		utils.ErrorSimple(w, http.StatusBadRequest, "seules les images JPEG et PNG sont autorisées")
+	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/jpg" && contentType != "image/webp" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "seules les images JPEG, PNG et WebP sont autorisées")
 		return
 	}
 
-	// Déterminer l'extension du fichier
-	ext := ".jpg"
-	if contentType == "image/png" {
-		ext = ".png"
-	}
-
-	// Créer le nom du fichier
-	filename := user.ID + ext
-	uploadDir := "uploads/avatars"
-
-	// Créer le dossier s'il n'existe pas
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer le dossier d'upload", err)
-		return
-	}
-
-	// Supprimer les anciennes photos de cet utilisateur (jpg, png, jpeg, svg)
-	oldExtensions := []string{".jpg", ".jpeg", ".png", ".svg"}
-	for _, oldExt := range oldExtensions {
-		oldFilePath := filepath.Join(uploadDir, user.ID+oldExt)
-		if _, err := os.Stat(oldFilePath); err == nil {
-			// Le fichier existe, on le supprime
-			os.Remove(oldFilePath)
-		}
-	}
-
-	// Créer le fichier de destination
-	filepath := filepath.Join(uploadDir, filename)
-	dst, err := os.Create(filepath)
-	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de créer le fichier", err)
-		return
-	}
-	defer dst.Close()
-
-	// Copier le fichier uploadé vers la destination
-	if _, err := io.Copy(dst, file); err != nil {
-		utils.Error(w, http.StatusInternalServerError, "impossible de sauvegarder le fichier", err)
-		return
-	}
-
-	// Charger la config pour récupérer l'URL de base
+	// Charger la config
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "impossible de charger la configuration", err)
 		return
 	}
 
-	// Construire l'URL complète de l'avatar
-	avatarURL := fmt.Sprintf("%s/avatars/%s", cfg.URL, filename)
-
 	ctx := context.Background()
+	var avatarURL string
+
+	// Essayer d'uploader vers Cloudinary si configuré
+	if cfg.CloudinaryCloudName != "" && cfg.CloudinaryAPIKey != "" && cfg.CloudinaryAPISecret != "" {
+		// Initialiser le service Cloudinary
+		cloudinaryService, err := services.NewCloudinaryService(cfg)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "failed to initialize cloudinary", err)
+			return
+		}
+
+		// Upload vers Cloudinary
+		avatarURL, err = cloudinaryService.UploadAvatar(ctx, file, user.ID, handler.Filename)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "failed to upload to cloudinary", err)
+			return
+		}
+	} else {
+		// Fallback: stockage local (éphémère sur Render.com!)
+		ext := ".jpg"
+		if contentType == "image/png" {
+			ext = ".png"
+		} else if contentType == "image/webp" {
+			ext = ".webp"
+		}
+
+		filename := user.ID + ext
+		uploadDir := "uploads/avatars"
+
+		// Créer le dossier s'il n'existe pas
+		if err := os.MkdirAll(uploadDir, 0755); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "impossible de créer le dossier d'upload", err)
+			return
+		}
+
+		// Supprimer les anciennes photos
+		oldExtensions := []string{".jpg", ".jpeg", ".png", ".svg", ".webp"}
+		for _, oldExt := range oldExtensions {
+			oldFilePath := filepath.Join(uploadDir, user.ID+oldExt)
+			if _, err := os.Stat(oldFilePath); err == nil {
+				os.Remove(oldFilePath)
+			}
+		}
+
+		// Créer le fichier de destination
+		filePath := filepath.Join(uploadDir, filename)
+		dst, err := os.Create(filePath)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "impossible de créer le fichier", err)
+			return
+		}
+		defer dst.Close()
+
+		// Copier le fichier
+		if _, err := io.Copy(dst, file); err != nil {
+			utils.Error(w, http.StatusInternalServerError, "impossible de sauvegarder le fichier", err)
+			return
+		}
+
+		// Construire l'URL locale
+		avatarURL = fmt.Sprintf("%s/avatars/%s", cfg.URL, filename)
+	}
 
 	// Mettre à jour l'avatar dans la base de données
 	_, err = database.DB.Exec(ctx,
@@ -533,6 +552,8 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAvatar sert l'image de profil d'un utilisateur
+// Note: Si l'avatar est hébergé sur Cloudinary, cette route ne sera pas utilisée
+// car les URLs Cloudinary sont des URLs directes
 func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	// Ajouter les headers CORS explicitement pour les images
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -554,7 +575,6 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Nettoyer le filename pour extraire juste le nom du fichier (au cas où c'est une URL)
-	// Exemple: si filename contient une URL complète, on extrait juste le nom du fichier
 	if strings.Contains(filename, "/") {
 		parts := strings.Split(filename, "/")
 		filename = parts[len(parts)-1]
@@ -572,7 +592,8 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 
 	// Vérifier que le fichier existe
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		utils.ErrorSimple(w, http.StatusNotFound, "image non trouvée")
+		// Retourner une image par défaut ou une erreur 404
+		utils.ErrorSimple(w, http.StatusNotFound, "image non trouvée - utilisez Cloudinary pour un stockage persistant")
 		return
 	}
 

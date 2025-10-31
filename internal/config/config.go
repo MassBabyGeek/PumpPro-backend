@@ -15,6 +15,11 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	URL        string
+
+	// Cloudinary Configuration
+	CloudinaryCloudName string
+	CloudinaryAPIKey    string
+	CloudinaryAPISecret string
 }
 
 func LoadConfig() (*Config, error) {
@@ -31,6 +36,11 @@ func LoadConfig() (*Config, error) {
 		DBPassword: getEnv("DB_PASSWORD", "postgres"),
 		DBName:     getEnv("DB_NAME", "myapp_db"),
 		URL:        getEnv("URL", "http://localhost:8080"),
+
+		// Cloudinary
+		CloudinaryCloudName: getEnv("CLOUDINARY_CLOUD_NAME", ""),
+		CloudinaryAPIKey:    getEnv("CLOUDINARY_API_KEY", ""),
+		CloudinaryAPISecret: getEnv("CLOUDINARY_API_SECRET", ""),
 	}, nil
 }
 
