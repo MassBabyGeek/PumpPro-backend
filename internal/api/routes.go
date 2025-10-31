@@ -145,6 +145,11 @@ func SetupRouter() http.Handler {
 	// Content Management
 	authenticatedRoutes.HandleFunc("/admin/photos", handler.GetAllPhotos).Methods(http.MethodGet)
 
+	// Bug Report Management
+	authenticatedRoutes.HandleFunc("/admin/bug-reports", handler.GetAdminBugReports).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/bug-reports/{reportId}/resolve", handler.ResolveBugReport).Methods(http.MethodPost)
+	authenticatedRoutes.HandleFunc("/admin/bug-reports/{reportId}/assign", handler.AssignBugReport).Methods(http.MethodPost)
+
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Route not found", http.StatusNotFound)
 	})

@@ -14,6 +14,7 @@ import (
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
@@ -1036,4 +1037,313 @@ func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Message(w, "user deleted successfully")
+}
+
+// GetAdminBugReports retourne tous les bug reports pour l'admin avec filtrage avancé
+func GetAdminBugReports(w http.ResponseWriter, r *http.Request) {
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	ctx := context.Background()
+	query := r.URL.Query()
+
+	// Paramètres de filtrage
+	status := query.Get("status")       // "pending", "in_progress", "resolved", "closed"
+	severity := query.Get("severity")   // "low", "medium", "high", "critical"
+	category := query.Get("category")   // "bug", "feature", "ui", "performance", "crash", "other"
+	search := query.Get("search")       // Recherche dans title/description
+	sortBy := query.Get("sort")         // "created_at", "updated_at", "severity"
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	sortOrder := query.Get("order")     // "asc", "desc"
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+
+	// Pagination
+	limit := 50
+	offset := 0
+	if limitStr := query.Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	// Construction de la requête SQL
+	sqlQuery := fmt.Sprintf(`
+		SELECT
+			br.id, br.user_id, br.title, br.description, br.category,
+			br.severity, br.status, br.device_info, br.app_version,
+			br.page_url, br.error_stack, br.screenshot_url, br.user_email,
+			br.created_at, br.updated_at, br.resolved_at, br.resolved_by, br.admin_notes,
+			u.name as user_name, u.avatar as user_avatar
+		FROM bug_reports br
+		LEFT JOIN users u ON br.user_id = u.id
+		WHERE 1=1
+	`)
+
+	args := []interface{}{}
+	argCount := 1
+
+	if status != "" {
+		sqlQuery += fmt.Sprintf(" AND br.status = $%d", argCount)
+		args = append(args, status)
+		argCount++
+	}
+
+	if severity != "" {
+		sqlQuery += fmt.Sprintf(" AND br.severity = $%d", argCount)
+		args = append(args, severity)
+		argCount++
+	}
+
+	if category != "" {
+		sqlQuery += fmt.Sprintf(" AND br.category = $%d", argCount)
+		args = append(args, category)
+		argCount++
+	}
+
+	if search != "" {
+		sqlQuery += fmt.Sprintf(" AND (br.title ILIKE $%d OR br.description ILIKE $%d)", argCount, argCount)
+		args = append(args, "%"+search+"%")
+		argCount++
+	}
+
+	// Tri
+	validSortColumns := map[string]bool{
+		"created_at": true,
+		"updated_at": true,
+		"severity":   true,
+	}
+	if !validSortColumns[sortBy] {
+		sortBy = "created_at"
+	}
+
+	validSortOrders := map[string]bool{
+		"asc":  true,
+		"desc": true,
+	}
+	if !validSortOrders[sortOrder] {
+		sortOrder = "desc"
+	}
+
+	sqlQuery += fmt.Sprintf(" ORDER BY br.%s %s", sortBy, sortOrder)
+
+	// Pagination
+	sqlQuery += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argCount, argCount+1)
+	args = append(args, limit, offset)
+
+	rows, err := database.DB.Query(ctx, sqlQuery, args...)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch bug reports", err)
+		return
+	}
+	defer rows.Close()
+
+	type BugReportWithUser struct {
+		model.BugReport
+		UserName   *string `json:"userName,omitempty"`
+		UserAvatar *string `json:"userAvatar,omitempty"`
+	}
+
+	var reports []BugReportWithUser
+	for rows.Next() {
+		var report BugReportWithUser
+		var deviceInfoBytes []byte
+		var userID, appVersion, pageURL, errorStack, screenshotURL, userEmail, resolvedBy, adminNotes sql.NullString
+		var userName, userAvatar sql.NullString
+		var resolvedAt sql.NullTime
+
+		err := rows.Scan(
+			&report.ID, &userID, &report.Title, &report.Description, &report.Category,
+			&report.Severity, &report.Status, &deviceInfoBytes, &appVersion,
+			&pageURL, &errorStack, &screenshotURL, &userEmail,
+			&report.CreatedAt, &report.UpdatedAt, &resolvedAt, &resolvedBy, &adminNotes,
+			&userName, &userAvatar,
+		)
+		if err != nil {
+			continue
+		}
+
+		report.UserID = utils.NullStringToPointer(userID)
+		report.AppVersion = utils.NullStringToPointer(appVersion)
+		report.PageURL = utils.NullStringToPointer(pageURL)
+		report.ErrorStack = utils.NullStringToPointer(errorStack)
+		report.ScreenshotURL = utils.NullStringToPointer(screenshotURL)
+		report.UserEmail = utils.NullStringToPointer(userEmail)
+		report.ResolvedBy = utils.NullStringToPointer(resolvedBy)
+		report.AdminNotes = utils.NullStringToPointer(adminNotes)
+		report.ResolvedAt = utils.NullTimeToPointer(resolvedAt)
+		report.UserName = utils.NullStringToPointer(userName)
+		report.UserAvatar = utils.NullStringToPointer(userAvatar)
+
+		if len(deviceInfoBytes) > 0 {
+			report.DeviceInfo = deviceInfoBytes
+		}
+
+		reports = append(reports, report)
+	}
+
+	// Compter le total
+	countQuery := "SELECT COUNT(*) FROM bug_reports br WHERE 1=1"
+	countArgs := []interface{}{}
+	countArgNum := 1
+
+	if status != "" {
+		countQuery += fmt.Sprintf(" AND br.status = $%d", countArgNum)
+		countArgs = append(countArgs, status)
+		countArgNum++
+	}
+	if severity != "" {
+		countQuery += fmt.Sprintf(" AND br.severity = $%d", countArgNum)
+		countArgs = append(countArgs, severity)
+		countArgNum++
+	}
+	if category != "" {
+		countQuery += fmt.Sprintf(" AND br.category = $%d", countArgNum)
+		countArgs = append(countArgs, category)
+		countArgNum++
+	}
+	if search != "" {
+		countQuery += fmt.Sprintf(" AND (br.title ILIKE $%d OR br.description ILIKE $%d)", countArgNum, countArgNum)
+		countArgs = append(countArgs, "%"+search+"%")
+	}
+
+	var total int
+	database.DB.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+
+	result := map[string]interface{}{
+		"reports": reports,
+		"pagination": map[string]interface{}{
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
+			"count":  len(reports),
+		},
+		"filters": map[string]interface{}{
+			"status":   status,
+			"severity": severity,
+			"category": category,
+			"search":   search,
+		},
+	}
+
+	utils.Success(w, result)
+}
+
+// ResolveBugReport marque un bug report comme résolu (raccourci admin)
+func ResolveBugReport(w http.ResponseWriter, r *http.Request) {
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	vars := mux.Vars(r)
+	reportID := vars["reportId"]
+
+	if reportID == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "report ID required")
+		return
+	}
+
+	adminID, err := middleware.GetUserIDFromContext(r)
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Structure pour recevoir les notes optionnelles
+	type ResolveRequest struct {
+		AdminNotes string `json:"adminNotes"`
+	}
+
+	var req ResolveRequest
+	utils.DecodeJSON(r, &req) // Erreur ignorée, adminNotes est optionnel
+
+	ctx := context.Background()
+
+	// Mettre à jour le statut à "resolved"
+	query := `
+		UPDATE bug_reports
+		SET status = 'resolved',
+		    resolved_at = NOW(),
+		    resolved_by = $1,
+		    admin_notes = CASE WHEN $2 != '' THEN $2 ELSE admin_notes END,
+		    updated_at = NOW()
+		WHERE id = $3
+		RETURNING id, user_id, title, description, category, severity, status,
+		          device_info, app_version, page_url, error_stack, screenshot_url,
+		          user_email, created_at, updated_at, resolved_at, resolved_by, admin_notes
+	`
+
+	row := database.DB.QueryRow(ctx, query, adminID, req.AdminNotes, reportID)
+	report, err := scanner.ScanBugReport(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not resolve bug report", err)
+		return
+	}
+
+	utils.Success(w, report)
+}
+
+// AssignBugReport assigne un bug report à un admin
+func AssignBugReport(w http.ResponseWriter, r *http.Request) {
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	vars := mux.Vars(r)
+	reportID := vars["reportId"]
+
+	type AssignRequest struct {
+		AdminID string `json:"adminId"`
+		Notes   string `json:"notes"`
+	}
+
+	var req AssignRequest
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Vérifier que l'admin existe
+	var isAdmin bool
+	err := database.DB.QueryRow(ctx, "SELECT is_admin FROM users WHERE id = $1 AND deleted_at IS NULL", req.AdminID).Scan(&isAdmin)
+	if err != nil || !isAdmin {
+		utils.ErrorSimple(w, http.StatusBadRequest, "admin ID invalid or user is not an admin")
+		return
+	}
+
+	// Mettre à jour le bug report
+	query := `
+		UPDATE bug_reports
+		SET status = 'in_progress',
+		    resolved_by = $1,
+		    admin_notes = CASE WHEN $2 != '' THEN $2 ELSE admin_notes END,
+		    updated_at = NOW()
+		WHERE id = $3
+		RETURNING id, user_id, title, description, category, severity, status,
+		          device_info, app_version, page_url, error_stack, screenshot_url,
+		          user_email, created_at, updated_at, resolved_at, resolved_by, admin_notes
+	`
+
+	row := database.DB.QueryRow(ctx, query, req.AdminID, req.Notes, reportID)
+	report, err := scanner.ScanBugReport(row)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not assign bug report", err)
+		return
+	}
+
+	utils.Success(w, report)
 }
