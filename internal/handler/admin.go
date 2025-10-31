@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MassBabyGeek/PumpPro-backend/internal/config"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/middleware"
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/scanner"
+	"github.com/MassBabyGeek/PumpPro-backend/internal/services"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
@@ -191,6 +193,150 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.Success(w, result)
+}
+
+// DeleteAdminPhoto supprime une photo et met à jour la base de données
+func DeleteAdminPhoto(w http.ResponseWriter, r *http.Request) {
+	// Vérifier que l'utilisateur est admin
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	ctx := context.Background()
+
+	// Récupérer les paramètres de la requête
+	vars := mux.Vars(r)
+	entityID := vars["entityId"]
+	photoType := r.URL.Query().Get("type") // "avatar", "challenge", "bug_report"
+
+	if entityID == "" || photoType == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "entityId and type parameters are required")
+		return
+	}
+
+	// Valider le type de photo
+	if photoType != "avatar" && photoType != "challenge" && photoType != "bug_report" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "invalid photo type. Must be: avatar, challenge, or bug_report")
+		return
+	}
+
+	// Récupérer l'URL de la photo depuis la base de données
+	var photoURL string
+	var query string
+	var tableName string
+	var columnName string
+
+	switch photoType {
+	case "avatar":
+		tableName = "users"
+		columnName = "avatar"
+		query = "SELECT avatar FROM users WHERE id = $1 AND deleted_at IS NULL"
+	case "challenge":
+		tableName = "challenges"
+		columnName = "image_url"
+		query = "SELECT image_url FROM challenges WHERE id = $1 AND deleted_at IS NULL"
+	case "bug_report":
+		tableName = "bug_reports"
+		columnName = "screenshot_url"
+		query = "SELECT screenshot_url FROM bug_reports WHERE id = $1"
+	}
+
+	err := database.DB.QueryRow(ctx, query, entityID).Scan(&photoURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			utils.ErrorSimple(w, http.StatusNotFound, fmt.Sprintf("%s not found", photoType))
+			return
+		}
+		utils.Error(w, http.StatusInternalServerError, "could not query photo", err)
+		return
+	}
+
+	if photoURL == "" {
+		utils.ErrorSimple(w, http.StatusNotFound, "no photo found for this entity")
+		return
+	}
+
+	// Déterminer si c'est une image Cloudinary ou locale
+	isCloudinary := strings.Contains(photoURL, "cloudinary.com")
+
+	if isCloudinary {
+		// Supprimer de Cloudinary
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not load config", err)
+			return
+		}
+
+		cloudinaryService, err := services.NewCloudinaryService(cfg)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not initialize cloudinary", err)
+			return
+		}
+
+		// Extraire le publicID depuis l'URL Cloudinary
+		// Format: https://res.cloudinary.com/{cloud_name}/image/upload/{transformation}/{folder}/{publicID}.{format}
+		// On veut récupérer {folder}/{publicID}
+		var publicID string
+		if strings.Contains(photoURL, "/pumppro/") {
+			parts := strings.Split(photoURL, "/pumppro/")
+			if len(parts) == 2 {
+				// Enlever l'extension
+				pathWithExt := parts[1]
+				lastDot := strings.LastIndex(pathWithExt, ".")
+				if lastDot > 0 {
+					publicID = "pumppro/" + pathWithExt[:lastDot]
+				}
+			}
+		}
+
+		if publicID != "" {
+			err = cloudinaryService.DeleteImage(ctx, publicID)
+			if err != nil {
+				// Log l'erreur mais continue quand même pour nettoyer la DB
+				fmt.Printf("Warning: could not delete from Cloudinary: %v\n", err)
+			}
+		}
+	} else {
+		// Supprimer du stockage local
+		// Extraire le nom de fichier de l'URL
+		filename := filepath.Base(photoURL)
+
+		// Déterminer le dossier selon le type
+		var folder string
+		switch photoType {
+		case "avatar":
+			folder = "uploads/avatars"
+		case "challenge":
+			folder = "uploads/challenges"
+		case "bug_report":
+			folder = "uploads/bug_reports"
+		}
+
+		filePath := filepath.Join(folder, filename)
+
+		// Supprimer le fichier (ignore l'erreur si le fichier n'existe pas)
+		if _, err := os.Stat(filePath); err == nil {
+			err = os.Remove(filePath)
+			if err != nil {
+				fmt.Printf("Warning: could not delete local file: %v\n", err)
+			}
+		}
+	}
+
+	// Mettre à jour la base de données pour supprimer l'URL
+	updateQuery := fmt.Sprintf("UPDATE %s SET %s = NULL, updated_at = NOW() WHERE id = $1", tableName, columnName)
+	_, err = database.DB.Exec(ctx, updateQuery, entityID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not update database", err)
+		return
+	}
+
+	utils.Success(w, map[string]interface{}{
+		"message":  "photo deleted successfully",
+		"type":     photoType,
+		"entityId": entityID,
+	})
 }
 
 // GetAdminDashboard retourne toutes les statistiques pour le dashboard admin

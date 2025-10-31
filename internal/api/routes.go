@@ -144,6 +144,7 @@ func SetupRouter() http.Handler {
 
 	// Content Management
 	authenticatedRoutes.HandleFunc("/admin/photos", handler.GetAllPhotos).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/photos/{entityId}", handler.DeleteAdminPhoto).Methods(http.MethodDelete)
 
 	// Bug Report Management
 	authenticatedRoutes.HandleFunc("/admin/bug-reports", handler.GetAdminBugReports).Methods(http.MethodGet)
