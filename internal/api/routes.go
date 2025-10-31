@@ -38,7 +38,7 @@ func SetupRouter() http.Handler {
 	r.HandleFunc("/users/{id}", handler.GetUser).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{id}", handler.DeleteUser).Methods(http.MethodDelete)
 	authenticatedRoutes.HandleFunc("/users/{id}/avatar", handler.UploadAvatar).Methods(http.MethodPost)
-	r.HandleFunc("/avatars/{filename}", handler.GetAvatar).Methods(http.MethodGet)
+	r.HandleFunc("/avatars/{filename}", handler.GetAvatar).Methods(http.MethodGet, http.MethodOptions)
 	authenticatedRoutes.HandleFunc("/users/{userId}/stats/{period}", handler.GetUserStats).Methods(http.MethodGet)
 	authenticatedRoutes.HandleFunc("/users/{userId}/charts/{period}", handler.GetChartData).Methods(http.MethodGet)
 	r.HandleFunc("/users/{userId}/streak", handler.GetUserStreak).Methods(http.MethodGet)
@@ -137,9 +137,10 @@ func SetupRouter() http.Handler {
 
 	// User Management
 	authenticatedRoutes.HandleFunc("/admin/users", handler.GetAdminUsers).Methods(http.MethodGet)
+	authenticatedRoutes.HandleFunc("/admin/users/{userId}", handler.AdminUpdateUser).Methods(http.MethodPut, http.MethodPatch)
+	authenticatedRoutes.HandleFunc("/admin/users/{userId}", handler.AdminDeleteUser).Methods(http.MethodDelete)
 	authenticatedRoutes.HandleFunc("/admin/users/{userId}/promote", handler.PromoteUserToAdmin).Methods(http.MethodPost)
 	authenticatedRoutes.HandleFunc("/admin/users/{userId}/demote", handler.DemoteUserFromAdmin).Methods(http.MethodPost)
-	authenticatedRoutes.HandleFunc("/admin/users/{userId}", handler.DeleteUserPermanently).Methods(http.MethodDelete)
 
 	// Content Management
 	authenticatedRoutes.HandleFunc("/admin/photos", handler.GetAllPhotos).Methods(http.MethodGet)

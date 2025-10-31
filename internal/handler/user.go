@@ -534,6 +534,17 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 // GetAvatar sert l'image de profil d'un utilisateur
 func GetAvatar(w http.ResponseWriter, r *http.Request) {
+	// Ajouter les headers CORS explicitement pour les images
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Gérer les requêtes preflight OPTIONS
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	vars := mux.Vars(r)
 	filename := vars["filename"]
 
@@ -566,7 +577,7 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Déterminer le type MIME en fonction de l’extension
+	// Déterminer le type MIME en fonction de l'extension
 	ext := strings.ToLower(filepath.Ext(filename))
 	var contentType string
 
@@ -577,6 +588,10 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 		contentType = "image/jpeg"
 	case ".svg":
 		contentType = "image/svg+xml"
+	case ".webp":
+		contentType = "image/webp"
+	case ".gif":
+		contentType = "image/gif"
 	default:
 		utils.ErrorSimple(w, http.StatusBadRequest, "format d'image non supporté")
 		return
@@ -585,6 +600,7 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 	// Définir les en-têtes HTTP
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache de 24h
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, Cache-Control")
 
 	// Envoyer le contenu de l'image
 	if _, err := io.Copy(w, file); err != nil {

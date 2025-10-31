@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MassBabyGeek/PumpPro-backend/internal/database"
@@ -15,6 +16,7 @@ import (
 	model "github.com/MassBabyGeek/PumpPro-backend/internal/models"
 	"github.com/MassBabyGeek/PumpPro-backend/internal/utils"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Photo struct {
@@ -828,6 +830,198 @@ func DeleteUserPermanently(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	_, err = database.DB.Exec(ctx,
 		"UPDATE users SET deleted_at = NOW(), deleted_by = $1 WHERE id = $2",
+		adminID, userID,
+	)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not delete user", err)
+		return
+	}
+
+	utils.Message(w, "user deleted successfully")
+}
+
+// AdminUpdateUser permet à un admin de modifier n'importe quel utilisateur
+func AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	vars := mux.Vars(r)
+	userID := vars["userId"]
+
+	if userID == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "user ID required")
+		return
+	}
+
+	// Structure pour recevoir les données de mise à jour (avec champs optionnels)
+	type UpdateUserRequest struct {
+		Name     *string  `json:"name"`
+		Email    *string  `json:"email"`
+		Avatar   *string  `json:"avatar"`
+		Age      *int     `json:"age"`
+		Weight   *float64 `json:"weight"`
+		Height   *float64 `json:"height"`
+		Goal     *string  `json:"goal"`
+		Score    *int     `json:"score"`
+		IsAdmin  *bool    `json:"isAdmin"`
+		Password *string  `json:"password"` // Optionnel, ignoré si non fourni
+	}
+
+	var req UpdateUserRequest
+	if err := utils.DecodeJSON(r, &req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "JSON invalide", err)
+		return
+	}
+
+	adminID, err := middleware.GetUserIDFromContext(r)
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	ctx := context.Background()
+
+	// Construire la requête SQL dynamiquement en fonction des champs fournis
+	updateFields := []string{}
+	args := []interface{}{}
+	argCount := 1
+
+	if req.Name != nil {
+		updateFields = append(updateFields, fmt.Sprintf("name = $%d", argCount))
+		args = append(args, *req.Name)
+		argCount++
+	}
+	if req.Email != nil {
+		updateFields = append(updateFields, fmt.Sprintf("email = $%d", argCount))
+		args = append(args, *req.Email)
+		argCount++
+	}
+	if req.Avatar != nil {
+		updateFields = append(updateFields, fmt.Sprintf("avatar = $%d", argCount))
+		args = append(args, *req.Avatar)
+		argCount++
+	}
+	if req.Age != nil {
+		updateFields = append(updateFields, fmt.Sprintf("age = $%d", argCount))
+		args = append(args, *req.Age)
+		argCount++
+	}
+	if req.Weight != nil {
+		updateFields = append(updateFields, fmt.Sprintf("weight = $%d", argCount))
+		args = append(args, *req.Weight)
+		argCount++
+	}
+	if req.Height != nil {
+		updateFields = append(updateFields, fmt.Sprintf("height = $%d", argCount))
+		args = append(args, *req.Height)
+		argCount++
+	}
+	if req.Goal != nil {
+		updateFields = append(updateFields, fmt.Sprintf("goal = $%d", argCount))
+		args = append(args, *req.Goal)
+		argCount++
+	}
+	if req.Score != nil {
+		updateFields = append(updateFields, fmt.Sprintf("score = $%d", argCount))
+		args = append(args, *req.Score)
+		argCount++
+	}
+	if req.IsAdmin != nil {
+		updateFields = append(updateFields, fmt.Sprintf("is_admin = $%d", argCount))
+		args = append(args, *req.IsAdmin)
+		argCount++
+	}
+	if req.Password != nil && *req.Password != "" {
+		// Hash le mot de passe si fourni
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "could not hash password", err)
+			return
+		}
+		updateFields = append(updateFields, fmt.Sprintf("password = $%d", argCount))
+		args = append(args, string(hashedPassword))
+		argCount++
+	}
+
+	if len(updateFields) == 0 {
+		utils.ErrorSimple(w, http.StatusBadRequest, "no fields to update")
+		return
+	}
+
+	// Ajouter les champs updated_at et updated_by
+	updateFields = append(updateFields, fmt.Sprintf("updated_at = NOW()"))
+	updateFields = append(updateFields, fmt.Sprintf("updated_by = $%d", argCount))
+	args = append(args, adminID)
+	argCount++
+
+	// Ajouter l'ID de l'utilisateur à modifier
+	args = append(args, userID)
+
+	query := fmt.Sprintf(
+		"UPDATE users SET %s WHERE id = $%d AND deleted_at IS NULL",
+		strings.Join(updateFields, ", "),
+		argCount,
+	)
+
+	_, err = database.DB.Exec(ctx, query, args...)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not update user", err)
+		return
+	}
+
+	// Récupérer l'utilisateur mis à jour
+	var updatedUser model.UserProfile
+	err = database.DB.QueryRow(ctx, `
+		SELECT id, name, email, avatar, age, weight, height, goal, score, is_admin,
+		       join_date, created_at, updated_at, created_by, updated_by
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+	`, userID).Scan(
+		&updatedUser.ID, &updatedUser.Name, &updatedUser.Email, &updatedUser.Avatar,
+		&updatedUser.Age, &updatedUser.Weight, &updatedUser.Height, &updatedUser.Goal,
+		&updatedUser.Score, &updatedUser.IsAdmin, &updatedUser.JoinDate,
+		&updatedUser.CreatedAt, &updatedUser.UpdatedAt, &updatedUser.CreatedBy, &updatedUser.UpdatedBy,
+	)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "could not fetch updated user", err)
+		return
+	}
+
+	utils.Success(w, updatedUser)
+}
+
+// AdminDeleteUser permet à un admin de supprimer n'importe quel utilisateur
+func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	if !middleware.IsAdmin(r) {
+		utils.ErrorSimple(w, http.StatusForbidden, "admin privileges required")
+		return
+	}
+
+	vars := mux.Vars(r)
+	userID := vars["userId"]
+
+	if userID == "" {
+		utils.ErrorSimple(w, http.StatusBadRequest, "user ID required")
+		return
+	}
+
+	adminID, err := middleware.GetUserIDFromContext(r)
+	if err != nil {
+		utils.ErrorSimple(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Empêcher un admin de se supprimer lui-même
+	if adminID == userID {
+		utils.ErrorSimple(w, http.StatusBadRequest, "cannot delete yourself")
+		return
+	}
+
+	ctx := context.Background()
+	_, err = database.DB.Exec(ctx,
+		"UPDATE users SET deleted_at = NOW(), deleted_by = $1 WHERE id = $2 AND deleted_at IS NULL",
 		adminID, userID,
 	)
 	if err != nil {
