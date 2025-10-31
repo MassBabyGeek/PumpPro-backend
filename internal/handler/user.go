@@ -553,6 +553,13 @@ func GetAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Nettoyer le filename pour extraire juste le nom du fichier (au cas où c'est une URL)
+	// Exemple: si filename contient une URL complète, on extrait juste le nom du fichier
+	if strings.Contains(filename, "/") {
+		parts := strings.Split(filename, "/")
+		filename = parts[len(parts)-1]
+	}
+
 	// Récupérer le chemin absolu vers le répertoire d'uploads
 	cwd, err := os.Getwd()
 	if err != nil {

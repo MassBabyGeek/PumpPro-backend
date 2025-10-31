@@ -73,7 +73,7 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 				created_at
 			FROM users
 			WHERE avatar IS NOT NULL
-			  AND avatar != ''
+			  AND LENGTH(avatar) > 0
 			  AND deleted_at IS NULL
 		`
 
@@ -86,10 +86,12 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 
 		for rows.Next() {
 			var photo Photo
-			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &photo.CreatedAt)
+			var createdAt time.Time
+			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &createdAt)
 			if err != nil {
 				continue
 			}
+			photo.CreatedAt = createdAt.Format(time.RFC3339)
 			photos = append(photos, photo)
 		}
 	}
@@ -105,7 +107,7 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 				created_at
 			FROM challenges
 			WHERE image_url IS NOT NULL
-			  AND image_url != ''
+			  AND LENGTH(image_url) > 0
 			  AND deleted_at IS NULL
 		`
 
@@ -118,10 +120,12 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 
 		for rows.Next() {
 			var photo Photo
-			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &photo.CreatedAt)
+			var createdAt time.Time
+			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &createdAt)
 			if err != nil {
 				continue
 			}
+			photo.CreatedAt = createdAt.Format(time.RFC3339)
 			photos = append(photos, photo)
 		}
 	}
@@ -137,7 +141,7 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 				created_at
 			FROM bug_reports
 			WHERE screenshot_url IS NOT NULL
-			  AND screenshot_url != ''
+			  AND LENGTH(screenshot_url) > 0
 		`
 
 		rows, err := database.DB.Query(ctx, bugReportQuery)
@@ -149,10 +153,12 @@ func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
 
 		for rows.Next() {
 			var photo Photo
-			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &photo.CreatedAt)
+			var createdAt time.Time
+			err := rows.Scan(&photo.URL, &photo.Type, &photo.EntityID, &photo.EntityName, &createdAt)
 			if err != nil {
 				continue
 			}
+			photo.CreatedAt = createdAt.Format(time.RFC3339)
 			photos = append(photos, photo)
 		}
 	}
