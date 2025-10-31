@@ -247,11 +247,6 @@ func UpdateProgram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isCustom {
-		utils.ErrorSimple(w, http.StatusForbidden, "cannot modify non-custom program")
-		return
-	}
-
 	// Vérifier que l'utilisateur est admin OU propriétaire du programme
 	var ownerID string
 	if createdBy.Valid {
@@ -313,11 +308,6 @@ func DeleteProgram(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		utils.ErrorSimple(w, http.StatusNotFound, "program not found")
-		return
-	}
-
-	if !isCustom {
-		utils.ErrorSimple(w, http.StatusForbidden, "cannot delete non-custom program")
 		return
 	}
 
